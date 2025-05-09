@@ -8,9 +8,9 @@ cd ..
 ```
 
 ```
-cat data/foundation-policy-v0.1-data.tar.gz.part_* > data/foundation-policy-v0.1-data.tar.gz
+cat data/foundation-policy-v1-data.tar.gz.part_* > data/foundation-policy-v1-data.tar.gz
 cd rl-tools
-tar -xvf ../data/foundation-policy-v0.1-data.tar.gz
+tar -xvf ../data/foundation-policy-v1-data.tar.gz
 cd ..
 ```
 
