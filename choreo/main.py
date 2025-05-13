@@ -8,6 +8,7 @@ from cflib.crtp.crtpstack import CRTPPacket
 from cflib.crtp.crtpstack import CRTPPort
 from cflib.crazyflie.commander import SET_SETPOINT_CHANNEL, META_COMMAND_CHANNEL, TYPE_HOVER 
 from cflib.positioning.motion_commander import MotionCommander
+from cflib.crazyflie.log import LogConfig
 import numpy as np
 import time
 import asyncio
@@ -24,7 +25,22 @@ class Crazyflie:
     def __init__(self, uri='radio://0/80/2M/E7E7E7E7E7'):
         cflib.crtp.init_drivers()
         self.scf = SyncCrazyflie(uri, cf=CrazyflieCFLib())
+        self.scf.open_link()
         self.position = None
+        logconf = LogConfig(name="Choreo", period_in_ms=100)
+        logconf.add_variable('stateEstimate.x', 'float')
+        logconf.add_variable('stateEstimate.y', 'float')
+        logconf.add_variable('stateEstimate.z', 'float')
+        self.scf.cf.log.add_config(logconf)
+
+        def log_callback(timestamp, data, logconf):
+            x = data['stateEstimate.x']
+            y = data['stateEstimate.y']
+            z = data['stateEstimate.z']
+            self.position = np.array([x, y, z])
+            print(f"Position: {self.position}")
+        logconf.data_received_cb.add_callback(log_callback)
+        logconf.start()
         self.main()
     
     async def arm(self):
@@ -37,21 +53,24 @@ class Crazyflie:
     async def main(self):
         while True:
             await asyncio.sleep(0.1)
-            self.position = self.scf.cf.position_estimator._position
-            print(f"Position: {self.position}")
+            # self.position = self.scf.cf.position_estimator._position
+            # print(f"Position: {self.position}")
 
 
-    async def goto(self, position, distance_threshold=0.05):
+    async def goto(self, target, distance_threshold=0.05):
         distance = None
         while distance is None or distance > distance_threshold:
             if self.position is not None:
-                distance = np.linalg.norm(position - self.position)
-                position = np.zeros(3)
+                distance = np.linalg.norm(target - self.position)
+                position = target
                 orientation = np.array([0, 0, 0, 1])
                 linear_velocity = np.zeros(3)
                 angular_velocity = np.zeros(3)
                 linear_acceleration = np.zeros(3)
                 self.scf.cf.commander.send_full_state_setpoint(position, linear_velocity, linear_acceleration, orientation, *angular_velocity)
+                # diff = (target - self.position) / 2
+                # print(f"Diff: {diff}")
+                # self.scf.cf.commander.send_velocity_world_setpoint(*diff, 0)
             else:
                 print("Position not available yet")
             await asyncio.sleep(0.1)
@@ -68,8 +87,10 @@ async def main():
     cf = Crazyflie()
     loop = asyncio.get_event_loop()
     await cf.arm()
-    await cf.goto(np.array([0.0, 0.0, 0.2]))
+    await cf.goto(np.array([0.0, 0.0, 0.4]))
+    await cf.goto(np.array([0.0, 0.0, 0.0]))
     await cf.disarm()
+    asyncio.sleep(1000)
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
