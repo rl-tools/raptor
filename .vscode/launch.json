@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "choreo",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/choreo/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        }
+    ]
+}
