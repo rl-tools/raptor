@@ -17,6 +17,7 @@ import sdl2
 import sdl2.ext
 import roslibpy
 
+
 def send_learned_policy_packet(cf):
     pk = CRTPPacket()
     pk.port = CRTPPort.COMMANDER_GENERIC
@@ -181,10 +182,10 @@ async def main():
         await asyncio.sleep(0.1)
     vehicle = vehicles[0]
     await vehicle.arm()
-    # vehicle.learned_controller = True
+    vehicle.learned_controller = True
     await vehicle.goto(np.array([0.0, 0.0, 0.4]))
     await vehicle.goto(np.array([0.0, 0.0, 0.4]), timeout=2)
-    # vehicle.learned_controller = False
+    vehicle.learned_controller = False
     await vehicle.goto(np.array([0.0, 0.0, 0.0]))
     await vehicle.disarm()
     await asyncio.sleep(1000)
