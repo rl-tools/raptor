@@ -9,6 +9,14 @@
             "program": "${workspaceFolder}/choreo/main.py",
             "console": "integratedTerminal",
             "justMyCode": false
+        },
+        {
+            "name": "stoopid",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/choreo/stoopid.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
         }
     ]
 }

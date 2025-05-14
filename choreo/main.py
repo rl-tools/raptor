@@ -15,6 +15,7 @@ import time
 import asyncio
 import sdl2
 import sdl2.ext
+import roslibpy
 
 def send_learned_policy_packet(cf):
     pk = CRTPPacket()
@@ -27,9 +28,9 @@ deadman_trigger = False
 
 class Crazyflie:
     def __init__(self, uri='radio://0/80/2M/E7E7E7E7E7'):
-        cflib.crtp.init_drivers()
         self.scf = SyncCrazyflie(uri, cf=CrazyflieCFLib())
         self.scf.open_link()
+        self.initial_position = None
         self.position = None
         logconf = LogConfig(name="Choreo", period_in_ms=100)
         logconf.add_variable('stateEstimate.x', 'float')
@@ -43,7 +44,7 @@ class Crazyflie:
             y = data['stateEstimate.y']
             z = data['stateEstimate.z']
             sm = data['rltrp.sm']
-            self.position = np.array([x, y, z])
+            # self.position = np.array([x, y, z])
             # print(f"Position: {self.position}")
             # print(f"State: {sm}")
         logconf.data_received_cb.add_callback(log_callback)
@@ -57,13 +58,28 @@ class Crazyflie:
         loop = asyncio.get_event_loop()
         loop.create_task(self.main())
         self.disarmed = False
+    def pose_callback(self, msg):
+        pose = msg['pose']
+        self.position = np.array([pose['position']['x'], pose['position']['y'], pose['position']['z']])
+        if self.initial_position is None:
+            self.initial_position = self.position
+        self.scf.cf.extpos.send_extpose(
+            pose['position']['x'],
+            pose['position']['y'],
+            pose['position']['z'],
+            pose['orientation']['x'],
+            pose['orientation']['y'],
+            pose['orientation']['z'],
+            pose['orientation']['w']
+        )
+        # print(f"pos: {self.position[0]:.2f} {self.position[1]:.2f} {self.position[2]:.2f}")
     
     async def arm(self):
         print("Requesting arming")
-        self.scf.cf.platform.send_crash_recovery_request()
-        await asyncio.sleep(1.0)
-        self.scf.cf.platform.send_arming_request(True)
-        await asyncio.sleep(1.0)
+        # self.scf.cf.platform.send_crash_recovery_request()
+        # await asyncio.sleep(1.0)
+        # self.scf.cf.platform.send_arming_request(True)
+        # await asyncio.sleep(1.0)
     
     async def main(self):
         while True:
@@ -78,11 +94,13 @@ class Crazyflie:
             # print(f"Position: {self.position}")
 
 
-    async def goto(self, target, distance_threshold=0.05, timeout=None):
+    async def goto(self, target_input, distance_threshold=0.05, timeout=None, relative=True):
+        print(f"Going to {target_input}")
         distance = None
         start = time.time()
         while distance is None or distance > distance_threshold or (timeout is not None and time.time() - start < timeout) and not self.disarmed:
-            if self.position is not None:
+            if self.position is not None and self.initial_position is not None:
+                target = self.initial_position + target_input if relative else target_input
                 distance = np.linalg.norm(target - self.position)
                 position = target
                 orientation = np.array([0, 0, 0, 1])
@@ -132,23 +150,43 @@ async def deadman_monitor():
                 print("Deadman trigger released")
         await asyncio.sleep(0.01)
 
+vehicle_configs = [
+    {
+        "name": "crazyflie",
+        "type": Crazyflie,
+        "kwargs": {"uri": "radio://0/80/2M/E7E7E7E7E7"},
+        "mocap_topic": "/vicon/crazyflie/pose",
+    }
+]
 
 async def main():
     global deadman_trigger
+    cflib.crtp.init_drivers()
+    ros = roslibpy.Ros(host='localhost', port=9090)
+    ros.run(timeout=5)
     loop = asyncio.get_event_loop()
     loop.create_task(deadman_monitor())
     print("Waiting for deadman trigger")
     while not deadman_trigger:
         await asyncio.sleep(0.1)
-    cf = Crazyflie()
-    loop = asyncio.get_event_loop()
-    await cf.arm()
-    cf.learned_controller = True
-    await cf.goto(np.array([0.0, 0.0, 0.4]))
-    await cf.goto(np.array([0.0, 0.0, 0.4]), timeout=2)
-    cf.learned_controller = False
-    await cf.goto(np.array([0.0, 0.0, 0.0]))
-    await cf.disarm()
+
+    vehicles = []
+    for config in vehicle_configs:
+        vehicle = config["type"](**config["kwargs"])
+        listener = roslibpy.Topic(ros, config["mocap_topic"], 'geometry_msgs/PoseStamped', throttle_rate=10)
+        listener.subscribe(vehicle.pose_callback)
+        vehicles.append(vehicle)
+    print("Waiting for vehicles to be located")
+    while not all([v.position is not None for v in vehicles]):
+        await asyncio.sleep(0.1)
+    vehicle = vehicles[0]
+    await vehicle.arm()
+    # vehicle.learned_controller = True
+    await vehicle.goto(np.array([0.0, 0.0, 0.4]))
+    await vehicle.goto(np.array([0.0, 0.0, 0.4]), timeout=2)
+    # vehicle.learned_controller = False
+    await vehicle.goto(np.array([0.0, 0.0, 0.0]))
+    await vehicle.disarm()
     await asyncio.sleep(1000)
 
 if __name__ == '__main__':
