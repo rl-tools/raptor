@@ -75,7 +75,7 @@ from copy import copy
 import numpy as np
 import asyncio, websockets, json
 import l2f
-from l2f import vector8 as vector
+from l2f import vector256 as vector
 from foundation_model import QuadrotorPolicy
 import time
 class Simulator:
@@ -100,6 +100,8 @@ class Simulator:
         vector.initialize_environment(self.device, self.env)
         vector.sample_initial_parameters(self.device, self.env, self.params, self.rng)
         vector.sample_initial_state(self.device, self.env, self.params, self.state, self.rng)
+        for state in self.state.states:
+            state.position[2] = 0.0
         self.setpoints = np.zeros((self.env.N_ENVIRONMENTS, 6), dtype=np.float32)
         self.clients = []
     def num_drones(self):
@@ -120,9 +122,11 @@ class Simulator:
         self.setpoints[drone_id, 3:6] = velocity
     
     def arm_sink(self, drone_id):
+        print(f"Arming drone {drone_id}")
         self.arming_times[drone_id] = time.time()
         self.armed[drone_id] = True
     def disarm_sink(self, drone_id):
+        print(f"Disrming drone {drone_id}")
         self.armed[drone_id] = False
         self.arming_times[drone_id] = None
 
@@ -151,22 +155,22 @@ class Simulator:
                         action[i, :] = 0
                 dts = vector.step(self.device, self.env, self.params, self.state, action, self.next_state, self.rng)
                 for i in range(self.num_drones()):
-                    if self.next_state.states[i].position[2] < 0 and (self.arming_times[i] is None or self.arming_times[i] + self.ARMING_TIMEOUT < time.time()):
+                    if self.next_state.states[i].position[2] < 0:
                         self.next_state.states[i].position[2] = 0
                         self.next_state.states[i].orientation[0] = 1
                         self.next_state.states[i].orientation[1:] = 0
-                        self.next_state.states[i].linear_velocity[:] = 0
-                        self.next_state.states[i].angular_velocity[:] = 0
-                        if i < len(self.clients):
-                            self.armed[i] = False
-                            self.clients[i]._disarm_callback()
+                        now = time.time()
+                        if  self.arming_times[i] is None or self.arming_times[i] + self.ARMING_TIMEOUT < now:
+                            self.next_state.states[i].linear_velocity[2] = 0 if self.next_state.states[i].linear_velocity[2] < 0 else self.next_state.states[i].linear_velocity[2]
+                            self.next_state.states[i].linear_velocity[:2] *= 0.95
+                            self.next_state.states[i].angular_velocity[:] *= 0.95
+                            if self.arming_times[i] is not None and self.arming_times[i] + self.ARMING_TIMEOUT < now and i < len(self.clients):
+                                self.armed[i] = False
+                                self.clients[i]._disarm_callback()
                 self.state.assign(self.next_state)
-                ui_state = copy(self.state)
-                for i, s in enumerate(ui_state.states):
-                    s.position[0] += i * 0.1 # Spacing for visualization
-                state_action_message = vector.set_state_action_message(self.device, self.env, self.params, self.ui, ui_state, action)
+                state_action_message = vector.set_state_action_message(self.device, self.env, self.params, self.ui, self.state, action)
                 for i, client in enumerate(self.clients):
-                    client._odometry_callback(ui_state.states[i].position, ui_state.states[i].linear_velocity)
+                    client._odometry_callback(self.state.states[i].position, self.state.states[i].linear_velocity)
                 await websocket.send(state_action_message)
                 await asyncio.sleep(dts[-1])
 
@@ -179,13 +183,13 @@ async def main():
         asyncio.create_task(simulator.run()),
         *[asyncio.create_task(c.run()) for c in clients],
     ]
-    await asyncio.sleep(1)
+    await asyncio.sleep(10)
     for i, client in enumerate(clients):
         while client.position is None or client.velocity is None:
             await asyncio.sleep(0.1)
         client.change_state(DroneState.FLYING)
         client.command([*client.position[:2], 1], [0, 0, 0])
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(0.05)
     await asyncio.gather(*tasks)
 
 if __name__ == "__main__":
