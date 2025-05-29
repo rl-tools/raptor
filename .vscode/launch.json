@@ -17,6 +17,14 @@
             "program": "${workspaceFolder}/choreo/stoopid.py",
             "console": "integratedTerminal",
             "justMyCode": false
+        },
+        {
+            "name": "sim",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/choreo/sim.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
         }
     ]
 }
