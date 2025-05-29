@@ -10,8 +10,22 @@ class DroneState(Enum):
 class Drone:
     def __init__(self):
         self.state = DroneState.DISARMED
+        self.position = None
+        self.velocity = None
     def odometry_callback(self, position, velocity):
-        pass
+        self.position = position
+        self.velocity = velocity
+    def change_state(self, new_state):
+        old_state = self.state
+        self.state_transition(old_state, new_state)
+        self.state = new_state
+    def state_transition(self, old_state, new_state):
+        if old_state == DroneState.DISARMED and new_state == DroneState.FLYING:
+            self._arm()
+        elif old_state == DroneState.FLYING and new_state == DroneState.LANDING:
+            self._land()
+        elif new_state == DroneState.DISARMED:
+            self._disarm()
     def command(self, position, velocity):
         self._forward_command(position, velocity)
 
@@ -24,12 +38,35 @@ class SimulatedDrone(Drone):
         super().__init__()
         self.simulator = simulator
         self.command_sink = None
+        self.arm_sink = None
+        self.disarm_sink = None
+
         simulator.register_client(self)
 
     def set_command_sink(self, command_sink):
         self.command_sink = command_sink
+    def set_arm_sink(self, arm_sink):
+        self.arm_sink = arm_sink
+    def set_disarm_sink(self, disarm_sink):
+        self.disarm_sink = disarm_sink
+
+    def _arm(self):
+        if self.arm_sink is not None:
+            self.arm_sink()
+        else:
+            raise ValueError("Arm sink not set")
+    def _disarm(self):
+        if self.disarm_sink is not None:
+            self.disarm_sink()
+        else:
+            raise ValueError("Disarm sink not set")
+    def _disarm_callback(self):
+        self.change_state(DroneState.DISARMED)
+
+    def _odometry_callback(self, position, velocity):
+        self.odometry_callback(position, velocity)
     
-    def forward_command(self, position, velocity):
+    def _forward_command(self, position, velocity):
         if self.command_sink:
             self.command_sink(position, velocity)
     
@@ -40,11 +77,13 @@ import asyncio, websockets, json
 import l2f
 from l2f import vector8 as vector
 from foundation_model import QuadrotorPolicy
+import time
 class Simulator:
 
-    def __init__(self, MAX_POSITION_ERROR=0.5, MAX_VELOCITY_ERROR=0.5):
+    def __init__(self, MAX_POSITION_ERROR=0.5, MAX_VELOCITY_ERROR=0.5, ARMING_TIMEOUT=5):
         self.MAX_POSITION_ERROR = MAX_POSITION_ERROR
         self.MAX_VELOCITY_ERROR = MAX_VELOCITY_ERROR
+        self.ARMING_TIMEOUT = ARMING_TIMEOUT
         self.policy = QuadrotorPolicy()
         self.device = l2f.Device()
         self.rng = vector.VectorRng()
@@ -54,6 +93,8 @@ class Simulator:
         self.state = vector.VectorState()
         self.observation = np.zeros((self.env.N_ENVIRONMENTS, self.env.OBSERVATION_DIM), dtype=np.float32)
         self.next_state = vector.VectorState()
+        self.armed = np.zeros(self.env.N_ENVIRONMENTS, dtype=np.bool_)
+        self.arming_times = [None for _ in range(self.env.N_ENVIRONMENTS)]
 
         vector.initialize_rng(self.device, self.rng, 0)
         vector.initialize_environment(self.device, self.env)
@@ -68,12 +109,23 @@ class Simulator:
         if len(self.clients) >= self.num_drones():
             raise ValueError("Maximum number of drones reached")
         drone_id = len(self.clients)
+        client._odometry_callback(self.state.states[drone_id].position, self.state.states[drone_id].linear_velocity)
         self.clients.append(client)
         client.set_command_sink(lambda position, velocity: self.command_sink(drone_id, position, velocity))
+        client.set_arm_sink(lambda: self.arm_sink(drone_id))
+        client.set_disarm_sink(lambda: self.disarm_sink(drone_id))
     
     def command_sink(self, drone_id, position, velocity):
         self.setpoints[drone_id, :3] = position
         self.setpoints[drone_id, 3:6] = velocity
+    
+    def arm_sink(self, drone_id):
+        self.arming_times[drone_id] = time.time()
+        self.armed[drone_id] = True
+    def disarm_sink(self, drone_id):
+        self.armed[drone_id] = False
+        self.arming_times[drone_id] = None
+
 
     async def run(self):
         uri = "ws://localhost:13337/backend" # connection to the UI server
@@ -94,26 +146,46 @@ class Simulator:
                 self.observation[:, 3+4:3+4+3] -= self.setpoints[:, 3:3+3]
                 self.observation[:, 3+4:3+4+3] = np.clip(self.observation[:, 3+4:3+4+3], -self.MAX_VELOCITY_ERROR, self.MAX_VELOCITY_ERROR)
                 action = self.policy.evaluate_step(self.observation[:, :22])
+                for i in range(self.num_drones()):
+                    if not self.armed[i]:
+                        action[i, :] = 0
                 dts = vector.step(self.device, self.env, self.params, self.state, action, self.next_state, self.rng)
+                for i in range(self.num_drones()):
+                    if self.next_state.states[i].position[2] < 0 and (self.arming_times[i] is None or self.arming_times[i] + self.ARMING_TIMEOUT < time.time()):
+                        self.next_state.states[i].position[2] = 0
+                        self.next_state.states[i].orientation[0] = 1
+                        self.next_state.states[i].orientation[1:] = 0
+                        self.next_state.states[i].linear_velocity[:] = 0
+                        self.next_state.states[i].angular_velocity[:] = 0
+                        if i < len(self.clients):
+                            self.armed[i] = False
+                            self.clients[i]._disarm_callback()
                 self.state.assign(self.next_state)
                 ui_state = copy(self.state)
                 for i, s in enumerate(ui_state.states):
                     s.position[0] += i * 0.1 # Spacing for visualization
                 state_action_message = vector.set_state_action_message(self.device, self.env, self.params, self.ui, ui_state, action)
                 for i, client in enumerate(self.clients):
-                    client.odometry_callback(ui_state.states[i].position, ui_state.states[i].linear_velocity)
+                    client._odometry_callback(ui_state.states[i].position, ui_state.states[i].linear_velocity)
                 await websocket.send(state_action_message)
                 await asyncio.sleep(dts[-1])
 
 async def main():
     simulator = Simulator()
-    simulator.setpoints[:, :3] = np.random.randn(simulator.num_drones(), 3).astype(np.float32) / 10
+    # simulator.setpoints[:, :3] = np.random.randn(simulator.num_drones(), 3).astype(np.float32) / 10 
+    # simulator.setpoints[:, 2] += 1
     clients = [SimulatedDrone(simulator) for _ in range(simulator.num_drones())]
-    simulator_promise = simulator.run()
     tasks = [
         asyncio.create_task(simulator.run()),
         *[asyncio.create_task(c.run()) for c in clients],
     ]
+    await asyncio.sleep(1)
+    for i, client in enumerate(clients):
+        while client.position is None or client.velocity is None:
+            await asyncio.sleep(0.1)
+        client.change_state(DroneState.FLYING)
+        client.command([*client.position[:2], 1], [0, 0, 0])
+        await asyncio.sleep(0.2)
     await asyncio.gather(*tasks)
 
 if __name__ == "__main__":
