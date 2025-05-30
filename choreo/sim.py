@@ -1,6 +1,8 @@
 from enum import Enum
 from copy import copy
+from muxify import Muxify
 import asyncio
+import sys
 
 class DroneState(Enum):
     DISARMED = "disarmed"
@@ -8,10 +10,12 @@ class DroneState(Enum):
     LANDING = "landing"
 
 class Drone:
-    def __init__(self):
+    def __init__(self, name=None, stdout=None):
+        self.stdout = stdout
         self.state = DroneState.DISARMED
         self.position = None
         self.velocity = None
+        print(f"Client {name if name else '{unnamed}'} initialized", file=self.stdout)
     def odometry_callback(self, position, velocity):
         self.position = position
         self.velocity = velocity
@@ -27,6 +31,7 @@ class Drone:
         elif new_state == DroneState.DISARMED:
             self._disarm()
     def command(self, position, velocity):
+        print(f"cmd {'  '.join([f'{float(p):.2}' for p in position])}", file=self.stdout)
         self._forward_command(position, velocity)
 
     async def run(self):
@@ -34,8 +39,8 @@ class Drone:
             await asyncio.sleep(0.1)
 
 class SimulatedDrone(Drone):
-    def __init__(self, simulator):
-        super().__init__()
+    def __init__(self, simulator, **kwargs):
+        super().__init__(**kwargs)
         self.simulator = simulator
         self.command_sink = None
         self.arm_sink = None
@@ -43,7 +48,7 @@ class SimulatedDrone(Drone):
 
         simulator.register_client(self)
     def safety_distance(self):
-        return 0.1
+        return 0.2
 
     def set_command_sink(self, command_sink):
         self.command_sink = command_sink
@@ -53,11 +58,13 @@ class SimulatedDrone(Drone):
         self.disarm_sink = disarm_sink
 
     def _arm(self):
+        print("Arming drone", file=self.stdout)
         if self.arm_sink is not None:
             self.arm_sink()
         else:
             raise ValueError("Arm sink not set")
     def _disarm(self):
+        print("Disarming drone", file=self.stdout)
         if self.disarm_sink is not None:
             self.disarm_sink()
         else:
@@ -104,6 +111,7 @@ class Simulator:
         vector.sample_initial_state(self.device, self.env, self.params, self.state, self.rng)
         for state in self.state.states:
             state.position[2] = 0.0
+            state.linear_velocity[:] = 0
         self.setpoints = np.zeros((self.env.N_ENVIRONMENTS, 6), dtype=np.float32)
         self.clients = []
     def num_drones(self):
@@ -208,17 +216,21 @@ class Behavior:
                         displacement = second_client.position - client.position
                         while np.linalg.norm(displacement) < 1e-6:
                             displacement = np.random.uniform(-1, 1, size=3)
-                        target_position = client.position - (safety_distance - distance) / 2 * displacement / np.linalg.norm(displacement)
+                        target_position = client.position - (safety_distance*1.2 - distance) / 2 * displacement / np.linalg.norm(displacement)
                         target_position[2] = 1
                         # print(f"Collision avoidance: {client} and {second_client}")
             if min_distance is not None:
+                print(f"Min dist: {min_distance:.2f}", file=client.stdout)
                 self.initial_positions[client_i] = target_position + np.random.uniform(-0.01, 0.01, size=3)
             client.command(target_position, [0, 0, 0])
 
 
 async def main():
+    global simulator
     simulator = Simulator()
-    clients = [SimulatedDrone(simulator) for _ in range(simulator.num_drones())]
+    mux = Muxify(simulator.num_drones()+1)
+    sys.stdout = mux[0]
+    clients = [SimulatedDrone(simulator, name=f"{i}", stdout=mux[i+1]) for i in range(simulator.num_drones())]
     behavior = Behavior(clients)
     tasks = [
         asyncio.create_task(behavior.run()),
