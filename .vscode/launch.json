@@ -25,6 +25,18 @@
             "program": "${workspaceFolder}/choreo/sim.py",
             "console": "integratedTerminal",
             "justMyCode": false
+        },
+        {
+            "name": "elrs",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/choreo/elrs.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "/dev/ttyACM0",
+                "921600",
+            ]
         }
     ]
 }
