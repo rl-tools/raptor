@@ -7,6 +7,8 @@ from drone import DroneState
 from simulator import Simulator, SimulatedDrone
 import matplotlib.pyplot as plt
 import json
+import l2f
+import os
 np.random.seed(42)
 
 
@@ -19,9 +21,39 @@ def lissajous(t, A=1, B=0.5, a=1, b=2, z=1, scale=1, duration=10):
     vy = scale * B * np.cos(b * progress) * b * d_progress
     return np.array([x, y, z]), np.array([vx, vy, 0])
 
+import numpy as np
+
+
+import numpy as np
+
+def build_lookup(A=1, B=0.5, a=1, b=2, scale=1, N=10000):
+    theta = np.linspace(0, 2*np.pi, N)
+    x = scale*A*np.sin(a*theta)
+    y = scale*B*np.sin(b*theta)
+    s = np.concatenate(([0], np.cumsum(np.hypot(np.diff(x), np.diff(y)))))
+    return theta, s/s[-1], s[-1]
+
+theta_tab, s_norm_tab, total_len = build_lookup()
+
+def lissajous_uniform(t, A=1, B=0.5, a=1, b=2, z=1, scale=1, duration=10,
+                      theta_tab=theta_tab, s_norm_tab=s_norm_tab, total_len=total_len):
+    s_norm = (t % duration) / duration
+    theta = np.interp(s_norm, s_norm_tab, theta_tab)
+    x = scale*A*np.sin(a*theta)
+    y = scale*B*np.sin(b*theta)
+    dx_dth = scale*A*a*np.cos(a*theta)
+    dy_dth = scale*B*b*np.cos(b*theta)
+    denom = np.hypot(dx_dth, dy_dth)
+    v = total_len / duration
+    vx = v * dx_dth / denom
+    vy = v * dy_dth / denom
+    return np.array([x, y, z]), np.array([vx, vy, 0.0])
+
+
+
 def plot_lissajous(just_add=False, **kwargs):
     t_vals = np.linspace(0, kwargs["duration"], 1000)
-    coords = np.array([lissajous(t, **kwargs)[0] for t in t_vals])
+    coords = np.array([lissajous_uniform(t, **kwargs)[0] for t in t_vals])
 
     if not just_add:
         plt.figure(figsize=(6, 6))
@@ -58,7 +90,7 @@ class Behavior:
             self.send_commands()
             await asyncio.sleep(0.10)
         tick = 0
-        EPSILON = 0.1
+        EPSILON = 0.15
         while not all([np.linalg.norm(client.position - self.target_positions[i]) < EPSILON for i, client in enumerate(self.clients)]):
             self.send_commands()
             await asyncio.sleep(0.1)
@@ -71,7 +103,7 @@ class Behavior:
             self.target_positions[in_trajectory:] = self.initial_target_positions[:-in_trajectory] if in_trajectory > 0 else self.initial_target_positions
             for i, client in enumerate(self.clients):
                 if t > cumsum_spacing[i]:
-                    self.target_positions[i], self.target_velocities[i] = lissajous(t - cumsum_spacing[i], **self.lissajous_parameters)
+                    self.target_positions[i], self.target_velocities[i] = lissajous_uniform(t - cumsum_spacing[i], **self.lissajous_parameters)
             self.send_commands()
             await asyncio.sleep(dt)
             tick += 1
@@ -114,18 +146,31 @@ class Behavior:
 async def main():
     global simulator
     RANDOM_CLOSE_CALLS = False
-    lissajous_parameters = dict(A=1, B=0.5, duration=20)
-    plt.figure(figsize=(6, 6))
-    plot_lissajous(just_add=True, **lissajous_parameters)
+    scale = 1.5
+    lissajous_parameters = dict(A=1.5*scale, B=0.5*scale, duration=20)
     initial_positions = np.array([
-        [0, 0, 0],
-        [0, -0.5, 0],
-        [0, -1, 0],
-        [-0.25, -1.5, 0]
+        [0, 0., 0],
+        [0, -1.25, 0],
+        [-0.5, -1.5, 0],
+        [-1.0, -1.5, 0]
     ])
-    spacing = np.array([0, 3, 2, 2])
-    plt.scatter(initial_positions[:, 0], initial_positions[:, 1], label="Initial Positions", color='red')
+    spacing = np.array([0, 2.5, 2, 1])
+    # PLOT = False
+    plt.figure(figsize=(6, 6))
+    t_vals = np.linspace(0, lissajous_parameters["duration"], 1000)
+    coords = np.array([lissajous_uniform(t, **lissajous_parameters)[0] for t in t_vals])
+    vels = np.array([lissajous_uniform(t, **lissajous_parameters)[1] for t in t_vals])
+    plt.plot(t_vals, coords[:, 0], label="x")
+    plt.plot(t_vals, vels[:, 0], label="x")
+    plt.plot(t_vals, coords[:, 1], label="y")
+    plt.plot(t_vals, vels[:, 1], label="y")
     plt.show()
+    PLOT = True
+    if PLOT:
+        plt.figure(figsize=(6, 6))
+        plot_lissajous(just_add=True, **lissajous_parameters)
+        plt.scatter(initial_positions[:, 0], initial_positions[:, 1], label="Initial Positions", color='red')
+        plt.show()
     simulator = Simulator(N_DRONES=len(initial_positions))
     for state, initial_position in zip(simulator.state.states, initial_positions):
         state.position = initial_position
@@ -133,6 +178,17 @@ async def main():
     mux = Muxify(simulator.num_drones()+1) if MUX else [sys.stdout for _ in range(simulator.num_drones()+1)]
     sys.stdout = mux[0]
     clients = [SimulatedDrone(simulator, name=f"{i}", stdout=mux[i+1]) for i in range(simulator.num_drones())]
+    def set_parameters(id, name):
+        parameters = json.loads(l2f.parameters_to_json(simulator.device, simulator.env.environments[id], simulator.params.parameters[id]))
+        with open(os.path.join(os.path.dirname(__file__), "parameters", f"{name}.json"), "r") as f:
+            parameters["dynamics"] = json.load(f)["dynamics"]
+        l2f.parameters_from_json(simulator.device, simulator.env.environments[0], json.dumps(parameters), simulator.params.parameters[id])
+    
+    set_parameters(0, "x500")
+    set_parameters(1, "race")
+    set_parameters(2, "crazyflie")
+    set_parameters(3, "crazyflie")
+    
     # clients[0].safety_distance = 0.5
     behavior = Behavior(clients, lissajous_parameters=lissajous_parameters, spacing=spacing)
     async def loop():
