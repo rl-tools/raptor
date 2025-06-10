@@ -113,10 +113,9 @@ class SimulatedDrone(Drone):
         self.command_sink = None
         self.arm_sink = None
         self.disarm_sink = None
+        self.safety_distance = 0.2
 
         simulator.register_client(self)
-    def safety_distance(self):
-        return 0.2
 
     def set_command_sink(self, command_sink):
         self.command_sink = command_sink

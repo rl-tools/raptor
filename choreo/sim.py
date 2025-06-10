@@ -5,6 +5,8 @@ import sys
 import numpy as np
 from drone import DroneState
 from simulator import Simulator, SimulatedDrone
+import matplotlib.pyplot as plt
+import json
 np.random.seed(42)
 
 
@@ -17,26 +19,29 @@ def lissajous(t, A=1, B=0.5, a=1, b=2, z=1, scale=1, duration=10):
     vy = scale * B * np.cos(b * progress) * b * d_progress
     return np.array([x, y, z]), np.array([vx, vy, 0])
 
-def plot_lissajous(**kwargs):
-    import matplotlib.pyplot as plt
-    import json
+def plot_lissajous(just_add=False, **kwargs):
     t_vals = np.linspace(0, kwargs["duration"], 1000)
     coords = np.array([lissajous(t, **kwargs)[0] for t in t_vals])
 
-    plt.figure(figsize=(6, 6))
+    if not just_add:
+        plt.figure(figsize=(6, 6))
     plt.plot(coords[:, 0], coords[:, 1])
     plt.title(f"Lissajous: {json.dumps(kwargs)}")
     plt.xlabel("x")
     plt.ylabel("y")
     plt.axis('equal')
     plt.grid(True)
-    plt.show()
+    if not just_add:
+        plt.show()
 
 class Behavior:
-    def __init__(self, clients):
+    def __init__(self, clients, lissajous_parameters={}, spacing=None):
         self.clients = clients
         self.initial_positions = []
         self.position_offsets = []
+        self.lissajous_parameters = lissajous_parameters
+        assert len(self.clients) > 0, "At least one client is required"
+        self.spacing = spacing if spacing is not None else np.array([0, *np.ones(len(clients)-1)])
 
     async def run(self):
         for i, client in enumerate(self.clients):
@@ -46,6 +51,7 @@ class Behavior:
         self.initial_positions = np.array(self.initial_positions)
         self.target_positions = self.initial_positions.copy()
         self.target_positions[:, 2] += 1
+        self.initial_target_positions = self.target_positions.copy()
         self.target_velocities = np.zeros_like(self.target_positions)
         for client in self.clients:
             client.change_state(DroneState.FLYING)
@@ -59,13 +65,13 @@ class Behavior:
             tick += 1
         t = 0
         dt = 0.1
-        spacing = 2
-        lissajous_parameters = dict(scale=1.0, duration=10)
-        # plot_lissajous(**lissajous_parameters)
+        cumsum_spacing = np.cumsum(self.spacing)
         while True:
+            in_trajectory = np.sum(t > cumsum_spacing)
+            self.target_positions[in_trajectory:] = self.initial_target_positions[:-in_trajectory] if in_trajectory > 0 else self.initial_target_positions
             for i, client in enumerate(self.clients):
-                if t > i * spacing:
-                    self.target_positions[i], self.target_velocities[i] = lissajous(t - i * spacing, **lissajous_parameters)
+                if t > cumsum_spacing[i]:
+                    self.target_positions[i], self.target_velocities[i] = lissajous(t - cumsum_spacing[i], **self.lissajous_parameters)
             self.send_commands()
             await asyncio.sleep(dt)
             tick += 1
@@ -81,7 +87,7 @@ class Behavior:
             for second_client in filter(lambda c: c != client, self.clients):
                 if client.position is not None and second_client.position is not None:
                     distance = np.linalg.norm(np.array(client.position) - np.array(second_client.position))
-                    safety_distance = max(client.safety_distance(), second_client.safety_distance())
+                    safety_distance = max(client.safety_distance, second_client.safety_distance)
                     if distance < safety_distance and (min_distance is None or distance < min_distance):
                         min_distance = distance
                         displacement = second_client.position - client.position
@@ -108,12 +114,27 @@ class Behavior:
 async def main():
     global simulator
     RANDOM_CLOSE_CALLS = False
-    simulator = Simulator()
+    lissajous_parameters = dict(A=1, B=0.5, duration=20)
+    plt.figure(figsize=(6, 6))
+    plot_lissajous(just_add=True, **lissajous_parameters)
+    initial_positions = np.array([
+        [0, 0, 0],
+        [0, -0.5, 0],
+        [0, -1, 0],
+        [-0.25, -1.5, 0]
+    ])
+    spacing = np.array([0, 3, 2, 2])
+    plt.scatter(initial_positions[:, 0], initial_positions[:, 1], label="Initial Positions", color='red')
+    plt.show()
+    simulator = Simulator(N_DRONES=len(initial_positions))
+    for state, initial_position in zip(simulator.state.states, initial_positions):
+        state.position = initial_position
     MUX = False
     mux = Muxify(simulator.num_drones()+1) if MUX else [sys.stdout for _ in range(simulator.num_drones()+1)]
     sys.stdout = mux[0]
     clients = [SimulatedDrone(simulator, name=f"{i}", stdout=mux[i+1]) for i in range(simulator.num_drones())]
-    behavior = Behavior(clients)
+    # clients[0].safety_distance = 0.5
+    behavior = Behavior(clients, lissajous_parameters=lissajous_parameters, spacing=spacing)
     async def loop():
         tick = 0
         dt = 0.01
