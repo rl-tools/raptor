@@ -28,7 +28,7 @@ class Drone:
         elif new_state == DroneState.DISARMED:
             self._disarm()
     def command(self, position, velocity):
-        print(f"cmd {'  '.join([f'{float(p):.2}' for p in position])}", file=self.stdout)
+        # print(f"cmd {'  '.join([f'{float(p):.2}' for p in position])}", file=self.stdout)
         self._forward_command(position, velocity)
 
     async def run(self):
