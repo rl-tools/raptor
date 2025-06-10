@@ -1,34 +1,35 @@
 import numpy as np
 import asyncio, websockets, json
 import l2f
-from l2f import vector8 as vector
+from l2f import vector_selector
 from foundation_model import QuadrotorPolicy
 import time
 from drone import Drone, DroneState
 
 class Simulator:
 
-    def __init__(self, MAX_POSITION_ERROR=0.5, MAX_VELOCITY_ERROR=0.5, ARMING_TIMEOUT=5):
+    def __init__(self, N_DRONES=4, MAX_POSITION_ERROR=0.5, MAX_VELOCITY_ERROR=0.5, ARMING_TIMEOUT=5):
+        self.vector = vector_selector[N_DRONES]
         self.MAX_POSITION_ERROR = MAX_POSITION_ERROR
         self.MAX_VELOCITY_ERROR = MAX_VELOCITY_ERROR
         self.ARMING_TIMEOUT = ARMING_TIMEOUT
         self.policy = QuadrotorPolicy()
         self.device = l2f.Device()
-        self.rng = vector.VectorRng()
-        self.env = vector.VectorEnvironment()
+        self.rng = self.vector.VectorRng()
+        self.env = self.vector.VectorEnvironment()
         self.ui = l2f.UI()
-        self.params = vector.VectorParameters()
-        self.state = vector.VectorState()
+        self.params = self.vector.VectorParameters()
+        self.state = self.vector.VectorState()
         self.observation = np.zeros((self.env.N_ENVIRONMENTS, self.env.OBSERVATION_DIM), dtype=np.float32)
-        self.next_state = vector.VectorState()
+        self.next_state = self.vector.VectorState()
         self.armed = np.zeros(self.env.N_ENVIRONMENTS, dtype=np.bool_)
         self.arming_times = [None for _ in range(self.env.N_ENVIRONMENTS)]
 
         seed = 10
-        vector.initialize_rng(self.device, self.rng, seed)
-        vector.initialize_environment(self.device, self.env)
-        vector.sample_initial_parameters(self.device, self.env, self.params, self.rng)
-        vector.sample_initial_state(self.device, self.env, self.params, self.state, self.rng)
+        self.vector.initialize_rng(self.device, self.rng, seed)
+        self.vector.initialize_environment(self.device, self.env)
+        self.vector.sample_initial_parameters(self.device, self.env, self.params, self.rng)
+        self.vector.sample_initial_state(self.device, self.env, self.params, self.state, self.rng)
         for state in self.state.states:
             state.position[2] = 0.0
             state.linear_velocity[:] = 0
@@ -68,13 +69,13 @@ class Simulator:
             assert(handshake["channel"] == "handshake")
             namespace = handshake["data"]["namespace"]
             self.ui.ns = namespace
-            ui_message = vector.set_ui_message(self.device, self.env, self.ui)
-            parameters_message = vector.set_parameters_message(self.device, self.env, self.params, self.ui)
+            ui_message = self.vector.set_ui_message(self.device, self.env, self.ui)
+            parameters_message = self.vector.set_parameters_message(self.device, self.env, self.params, self.ui)
             await websocket.send(ui_message)
             await websocket.send(parameters_message)
             self.policy.reset()
             while True:
-                vector.observe(self.device, self.env, self.params, self.state, self.observation, self.rng)
+                self.vector.observe(self.device, self.env, self.params, self.state, self.observation, self.rng)
                 self.observation[:, :3] -= self.setpoints[:, :3]
                 self.observation[:, :3] = np.clip(self.observation[:, :3], -self.MAX_POSITION_ERROR, self.MAX_POSITION_ERROR)
                 self.observation[:, 3+4:3+4+3] -= self.setpoints[:, 3:3+3]
@@ -83,7 +84,7 @@ class Simulator:
                 for i in range(self.num_drones()):
                     if not self.armed[i]:
                         action[i, :] = 0
-                dts = vector.step(self.device, self.env, self.params, self.state, action, self.next_state, self.rng)
+                dts = self.vector.step(self.device, self.env, self.params, self.state, action, self.next_state, self.rng)
                 for i in range(self.num_drones()):
                     if self.next_state.states[i].position[2] < 0:
                         self.next_state.states[i].position[2] = 0
@@ -98,7 +99,7 @@ class Simulator:
                                 self.armed[i] = False
                                 self.clients[i]._disarm_callback()
                 self.state.assign(self.next_state)
-                state_action_message = vector.set_state_action_message(self.device, self.env, self.params, self.ui, self.state, action)
+                state_action_message = self.vector.set_state_action_message(self.device, self.env, self.params, self.ui, self.state, action)
                 for i, client in enumerate(self.clients):
                     client._odometry_callback(self.state.states[i].position, self.state.states[i].linear_velocity)
                 await websocket.send(state_action_message)

@@ -7,6 +7,31 @@ from drone import DroneState
 from simulator import Simulator, SimulatedDrone
 np.random.seed(42)
 
+
+def lissajous(t, A=1, B=0.5, a=1, b=2, z=1, scale=1, duration=10):
+    progress = t * 2 * np.pi / duration
+    d_progress = 2 * np.pi / duration
+    x = scale * A * np.sin(a * progress)
+    y = scale * B * np.sin(b * progress)
+    vx = scale * A * np.cos(a * progress) * a * d_progress
+    vy = scale * B * np.cos(b * progress) * b * d_progress
+    return np.array([x, y, z]), np.array([vx, vy, 0])
+
+def plot_lissajous(**kwargs):
+    import matplotlib.pyplot as plt
+    import json
+    t_vals = np.linspace(0, kwargs["duration"], 1000)
+    coords = np.array([lissajous(t, **kwargs)[0] for t in t_vals])
+
+    plt.figure(figsize=(6, 6))
+    plt.plot(coords[:, 0], coords[:, 1])
+    plt.title(f"Lissajous: {json.dumps(kwargs)}")
+    plt.xlabel("x")
+    plt.ylabel("y")
+    plt.axis('equal')
+    plt.grid(True)
+    plt.show()
+
 class Behavior:
     def __init__(self, clients):
         self.clients = clients
@@ -21,16 +46,30 @@ class Behavior:
         self.initial_positions = np.array(self.initial_positions)
         self.target_positions = self.initial_positions.copy()
         self.target_positions[:, 2] += 1
+        self.target_velocities = np.zeros_like(self.target_positions)
         for client in self.clients:
             client.change_state(DroneState.FLYING)
-            self.distribute_commands()
+            self.send_commands()
             await asyncio.sleep(0.10)
         tick = 0
+        EPSILON = 0.1
+        while not all([np.linalg.norm(client.position - self.target_positions[i]) < EPSILON for i, client in enumerate(self.clients)]):
+            self.send_commands()
+            await asyncio.sleep(0.1)
+            tick += 1
+        t = 0
         dt = 0.1
+        spacing = 2
+        lissajous_parameters = dict(scale=1.0, duration=10)
+        # plot_lissajous(**lissajous_parameters)
         while True:
-            self.distribute_commands()
+            for i, client in enumerate(self.clients):
+                if t > i * spacing:
+                    self.target_positions[i], self.target_velocities[i] = lissajous(t - i * spacing, **lissajous_parameters)
+            self.send_commands()
             await asyncio.sleep(dt)
             tick += 1
+            t += dt
     
     def avoid_collisions(self, target_positions, target_velocities):
         new_target_positions = []
@@ -59,9 +98,8 @@ class Behavior:
             new_target_velocities.append(target_velocity)
         return drones_in_avoidance, (new_target_positions, new_target_velocities)
     
-    def distribute_commands(self):
-        target_velocities = np.zeros_like(self.target_positions)
-        drones_in_avoidance, (target_positions, target_velocities) = self.avoid_collisions(self.target_positions, target_velocities)
+    def send_commands(self):
+        drones_in_avoidance, (target_positions, target_velocities) = self.avoid_collisions(self.target_positions, self.target_velocities)
         for client, target_position, target_velocity in zip(self.clients, target_positions, target_velocities):
             client.command(target_position, target_velocity)
 
@@ -69,6 +107,7 @@ class Behavior:
 
 async def main():
     global simulator
+    RANDOM_CLOSE_CALLS = False
     simulator = Simulator()
     MUX = False
     mux = Muxify(simulator.num_drones()+1) if MUX else [sys.stdout for _ in range(simulator.num_drones()+1)]
@@ -79,7 +118,7 @@ async def main():
         tick = 0
         dt = 0.01
         while True:
-            if tick % 100 == 0:
+            if RANDOM_CLOSE_CALLS and tick % 100 == 0:
                 min1 = np.random.randint(0, len(clients))
                 min2 = np.random.choice([i for i in range(len(clients)) if i != min1])
                 if tick == 100 * 3:
