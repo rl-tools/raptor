@@ -82,7 +82,7 @@ class Behavior:
                         target_position[2] = self.height
                         # print(f"Collision avoidance: {client} and {second_client}")
             if min_distance is not None:
-                print(f"Min dist: {min_distance:.2f}", file=client.stdout)
+                print(f"Min dist: {min_distance:.2f}")
                 self.target_positions[client_i] = target_position + np.random.uniform(-0.01, 0.01, size=3)
                 drones_in_avoidance += 1
             new_target_positions.append(target_position)
