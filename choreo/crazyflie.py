@@ -64,7 +64,7 @@ class Crazyflie:
         self.disarmed = False
         self.last_pose_callback = None
         self.pose_callback_dts = []
-    def pose_callback(self, msg):
+    def odometry_callback(self, msg):
         now = time.time()
         if self.last_pose_callback is not None and (now - self.last_pose_callback < 0.1):
             return
@@ -105,6 +105,11 @@ class Crazyflie:
             await asyncio.sleep(0.05)
             # self.position = self.scf.cf.position_estimator._position
             # print(f"Position: {self.position}")
+    async def _forward_command(self, position, velocity):
+            orientation = np.array([0, 0, 0, 1])
+            angular_velocity = np.zeros(3)
+            linear_acceleration = np.zeros(3)
+            self.scf.cf.commander.send_full_state_setpoint(position, velocity, linear_acceleration, orientation, *angular_velocity)
 
     async def goto(self, target_input, distance_threshold=0.15, timeout=None, relative=True):
         print(f"Going to {target_input}")
@@ -124,6 +129,13 @@ class Crazyflie:
             else:
                 print("Position not available yet")
             await asyncio.sleep(0.1)
+    async def land(self):
+        while self.position is None:
+            print("Land: Position not available yet")
+            await asyncio.sleep(0.1)
+        target_position = self.position.copy()
+        target_position[2] = 0.0
+        await self.goto(target_position, distance_threshold=0.1)
 
     async def disarm(self):
         print("Requesting disarming")

@@ -4,7 +4,7 @@ import l2f
 from l2f import vector_selector
 from foundation_model import QuadrotorPolicy
 import time
-from drone import Drone, DroneState
+from drone import Drone
 
 class Simulator:
 
@@ -124,20 +124,20 @@ class SimulatedDrone(Drone):
     def set_disarm_sink(self, disarm_sink):
         self.disarm_sink = disarm_sink
 
-    def _arm(self):
+    async def _arm(self):
         print("Arming drone", file=self.stdout)
         if self.arm_sink is not None:
             self.arm_sink()
         else:
             raise ValueError("Arm sink not set")
-    def _disarm(self):
+    async def _disarm(self):
         print("Disarming drone", file=self.stdout)
         if self.disarm_sink is not None:
             self.disarm_sink()
         else:
             raise ValueError("Disarm sink not set")
     def _disarm_callback(self):
-        self.change_state(DroneState.DISARMED)
+        self.disarm()
 
     def _odometry_callback(self, position, velocity):
         self.odometry_callback(position, velocity)

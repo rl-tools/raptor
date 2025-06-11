@@ -3,7 +3,6 @@ from muxify import Muxify
 import asyncio
 import sys
 import numpy as np
-from drone import DroneState
 from simulator import Simulator, SimulatedDrone
 import matplotlib.pyplot as plt
 import json
@@ -32,7 +31,7 @@ class Behavior:
         self.initial_target_positions = self.target_positions.copy()
         self.target_velocities = np.zeros_like(self.target_positions)
         for client in self.clients:
-            client.change_state(DroneState.FLYING)
+            await client.arm()
             self.send_commands()
             await asyncio.sleep(0.10)
         tick = 0
