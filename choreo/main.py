@@ -16,6 +16,8 @@ import asyncio
 import sdl2
 import sdl2.ext
 import roslibpy
+from muxify import Muxify
+mux = Muxify(2, flush_interval=0.01)
 
 
 def send_learned_policy_packet(cf):
@@ -59,7 +61,17 @@ class Crazyflie:
         loop = asyncio.get_event_loop()
         loop.create_task(self.main())
         self.disarmed = False
+        self.last_pose_callback = None
+        self.pose_callback_dts = []
     def pose_callback(self, msg):
+        now = time.time()
+        if self.last_pose_callback is not None and (now - self.last_pose_callback < 0.1):
+            return
+        if self.last_pose_callback is not None:
+            dt = now - self.last_pose_callback
+            self.pose_callback_dts.append(dt)
+            self.pose_callback_dts = self.pose_callback_dts[-100:]
+        self.last_pose_callback = now
         pose = msg['pose']
         self.position = np.array([pose['position']['x'], pose['position']['y'], pose['position']['z']])
         if self.initial_position is None:
@@ -73,7 +85,7 @@ class Crazyflie:
             pose['orientation']['z'],
             pose['orientation']['w']
         )
-        # print(f"pos: {self.position[0]:.2f} {self.position[1]:.2f} {self.position[2]:.2f}")
+        print(f"pos: {self.position[0]:.2f} {self.position[1]:.2f} {self.position[2]:.2f} {1/np.mean(self.pose_callback_dts):.2f} Hz", file=mux[1])
     
     async def arm(self):
         print("Requesting arming")
@@ -167,9 +179,6 @@ async def main():
     ros.run(timeout=5)
     loop = asyncio.get_event_loop()
     loop.create_task(deadman_monitor())
-    print("Waiting for deadman trigger")
-    while not deadman_trigger:
-        await asyncio.sleep(0.1)
 
     vehicles = []
     for config in vehicle_configs:
@@ -180,9 +189,13 @@ async def main():
     print("Waiting for vehicles to be located")
     while not all([v.position is not None for v in vehicles]):
         await asyncio.sleep(0.1)
+    print("Waiting for deadman trigger")
+    while not deadman_trigger:
+        await asyncio.sleep(0.1)
     vehicle = vehicles[0]
     await vehicle.arm()
-    vehicle.learned_controller = True
+    # vehicle.learned_controller = True
+    vehicle.learned_controller = False
     await vehicle.goto(np.array([0.0, 0.0, 0.4]))
     await vehicle.goto(np.array([0.0, 0.0, 0.4]), timeout=2)
     vehicle.learned_controller = False
