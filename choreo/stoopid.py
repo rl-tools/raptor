@@ -10,7 +10,7 @@ from cflib.crazyflie.console import Console
 import cflib.crtp
 import time
 
-uri='radio://0/80/2M/E7E7E7E7E7'
+uri='radio://0/80/2M/E7E7E7E7E8'
 cflib.crtp.init_drivers()
 with SyncCrazyflie(uri, cf=CrazyflieCFLib()) as scf:
     with MotionCommander(scf, default_height=0.3) as mc:

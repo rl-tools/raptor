@@ -17,7 +17,7 @@ import sdl2
 import sdl2.ext
 import roslibpy
 from muxify import Muxify
-mux = Muxify(2, flush_interval=0.01)
+mux = Muxify(5, flush_interval=0.01)
 
 
 def send_learned_policy_packet(cf):
@@ -33,7 +33,6 @@ class Crazyflie:
     def __init__(self, uri='radio://0/80/2M/E7E7E7E7E7'):
         self.scf = SyncCrazyflie(uri, cf=CrazyflieCFLib())
         self.scf.open_link()
-        self.initial_position = None
         self.position = None
         logconf = LogConfig(name="Choreo", period_in_ms=100)
         logconf.add_variable('stateEstimate.x', 'float')
@@ -42,20 +41,26 @@ class Crazyflie:
         logconf.add_variable('rltrp.sm', "uint8_t")
         self.scf.cf.log.add_config(logconf)
 
+        self.position_number = 0
         def log_callback(timestamp, data, logconf):
             x = data['stateEstimate.x']
             y = data['stateEstimate.y']
             z = data['stateEstimate.z']
             sm = data['rltrp.sm']
+            self.position = np.array([x, y, z])
+            if self.position_number % 10 == 0:
+                print(f"log  pos: {self.position[0]:.2f} {self.position[1]:.2f} {self.position[2]:.2f} {1/np.mean(self.pose_callback_dts):.2f} Hz", file=mux[2])
+            self.position_number += 1
             # self.position = np.array([x, y, z])
             # print(f"Position: {self.position}")
             # print(f"State: {sm}")
         logconf.data_received_cb.add_callback(log_callback)
         logconf.start()
         console = Console(self.scf.cf)
+        logfile = open("console.log", "a")
         def console_callback(text):
-            # pass
-            print(f"Console output: {text}")
+            logfile.write(text)
+            logfile.flush()
         console.receivedChar.add_callback(console_callback)
         self.learned_controller = False
         loop = asyncio.get_event_loop()
@@ -73,9 +78,8 @@ class Crazyflie:
             self.pose_callback_dts = self.pose_callback_dts[-100:]
         self.last_pose_callback = now
         pose = msg['pose']
-        self.position = np.array([pose['position']['x'], pose['position']['y'], pose['position']['z']])
-        if self.initial_position is None:
-            self.initial_position = self.position
+        position = [pose['position']['x'], pose['position']['y'], pose['position']['z']]
+        print(f"vicon pos: {position[0]:.2f} {position[1]:.2f} {position[2]:.2f} {1/np.mean(self.pose_callback_dts):.2f} Hz", file=mux[1])
         self.scf.cf.extpos.send_extpose(
             pose['position']['x'],
             pose['position']['y'],
@@ -85,21 +89,21 @@ class Crazyflie:
             pose['orientation']['z'],
             pose['orientation']['w']
         )
-        print(f"pos: {self.position[0]:.2f} {self.position[1]:.2f} {self.position[2]:.2f} {1/np.mean(self.pose_callback_dts):.2f} Hz", file=mux[1])
     
     async def arm(self):
         print("Requesting arming")
-        # self.scf.cf.platform.send_crash_recovery_request()
-        # await asyncio.sleep(1.0)
-        # self.scf.cf.platform.send_arming_request(True)
-        # await asyncio.sleep(1.0)
+        await asyncio.sleep(1.0)
+        self.scf.cf.platform.send_crash_recovery_request()
+        await asyncio.sleep(1.0)
+        print("arming", file=mux[2])
+        self.scf.cf.platform.send_arming_request(True)
+        await asyncio.sleep(1.0)
     
     async def main(self):
         while True:
             if not deadman_trigger:
-                while True:
-                    self.scf.cf.platform.send_arming_request(False)
-                    await asyncio.sleep(0.02)
+                print("disarming", file=mux[3])
+                self.scf.cf.platform.send_arming_request(False)
             elif self.learned_controller:
                 send_learned_policy_packet(self.scf.cf)
             await asyncio.sleep(0.05)
@@ -107,14 +111,15 @@ class Crazyflie:
             # print(f"Position: {self.position}")
 
 
-    async def goto(self, target_input, distance_threshold=0.05, timeout=None, relative=True):
+    async def goto(self, target_input, distance_threshold=0.15, timeout=None, relative=True):
         print(f"Going to {target_input}")
         distance = None
         start = time.time()
         while distance is None or distance > distance_threshold or (timeout is not None and time.time() - start < timeout) and not self.disarmed:
-            if self.position is not None and self.initial_position is not None:
-                target = self.initial_position + target_input if relative else target_input
+            if self.position is not None:
+                target = target_input if relative else target_input
                 distance = np.linalg.norm(target - self.position)
+                print(f"Distance to target: {distance:.2f} m", file=mux[4])
                 position = target
                 orientation = np.array([0, 0, 0, 1])
                 linear_velocity = np.zeros(3)
@@ -129,6 +134,7 @@ class Crazyflie:
         print("Requesting disarming")
         self.scf.cf.commander.send_stop_setpoint()
         self.scf.cf.commander.send_notify_setpoint_stop()
+        print("disarming", file=mux[2])
         self.scf.cf.platform.send_arming_request(False)
     
 
@@ -168,7 +174,9 @@ vehicle_configs = [
         "name": "crazyflie",
         "type": Crazyflie,
         "kwargs": {"uri": "radio://0/80/2M/E7E7E7E7E7"},
+        # "kwargs": {"uri": "radio://0/80/2M/E7E7E7E7E8"},
         "mocap_topic": "/vicon/crazyflie/pose",
+        # "mocap_topic": None,
     }
 ]
 
@@ -183,23 +191,26 @@ async def main():
     vehicles = []
     for config in vehicle_configs:
         vehicle = config["type"](**config["kwargs"])
-        listener = roslibpy.Topic(ros, config["mocap_topic"], 'geometry_msgs/PoseStamped', throttle_rate=10)
-        listener.subscribe(vehicle.pose_callback)
+        if config["mocap_topic"] is not None:
+            listener = roslibpy.Topic(ros, config["mocap_topic"], 'geometry_msgs/PoseStamped', throttle_rate=10)
+            listener.subscribe(vehicle.pose_callback)
         vehicles.append(vehicle)
     print("Waiting for vehicles to be located")
     while not all([v.position is not None for v in vehicles]):
         await asyncio.sleep(0.1)
+    vehicle = vehicles[0]
     print("Waiting for deadman trigger")
     while not deadman_trigger:
         await asyncio.sleep(0.1)
-    vehicle = vehicles[0]
+    initial_position = np.array(vehicle.position)
+    print(f"Initial position: {initial_position[0]:.2f} {initial_position[1]:.2f} {initial_position[2]:.2f}")
     await vehicle.arm()
-    # vehicle.learned_controller = True
+    vehicle.learned_controller = True
+    # vehicle.learned_controller = False
+    await vehicle.goto(initial_position + np.array([0.0, 0.0, 0.4]))
+    await vehicle.goto(initial_position + np.array([0.0, 0.0, 0.4]), timeout=2)
     vehicle.learned_controller = False
-    await vehicle.goto(np.array([0.0, 0.0, 0.4]))
-    await vehicle.goto(np.array([0.0, 0.0, 0.4]), timeout=2)
-    vehicle.learned_controller = False
-    await vehicle.goto(np.array([0.0, 0.0, 0.0]))
+    await vehicle.goto(initial_position + np.array([0.0, 0.0, 0.0]))
     await vehicle.disarm()
     await asyncio.sleep(1000)
 
