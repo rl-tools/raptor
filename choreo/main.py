@@ -28,6 +28,7 @@ def send_learned_policy_packet(cf):
 
 class Crazyflie:
     def __init__(self, uri='radio://0/80/2M/E7E7E7E7E7'):
+        cflib.crtp.init_drivers()
         self.scf = SyncCrazyflie(uri, cf=CrazyflieCFLib())
         self.scf.open_link()
         self.position = None
@@ -150,7 +151,6 @@ vehicle_configs = [
 
 async def main():
     deadman.run_deadman_monitor()
-    cflib.crtp.init_drivers()
     ros = roslibpy.Ros(host='localhost', port=9090)
     ros.run(timeout=5)
 
