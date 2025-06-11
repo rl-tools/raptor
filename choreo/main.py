@@ -47,7 +47,7 @@ async def main():
     # vehicle.learned_controller = False
     await vehicle.goto(initial_position + np.array([0.0, 0.0, 0.4]))
     await vehicle.goto(initial_position + np.array([0.0, 0.0, 0.4]), timeout=2)
-    vehicle.learned_controller = False
+    # vehicle.learned_controller = False
     await vehicle.goto(initial_position + np.array([0.0, 0.0, 0.0]))
     await vehicle.disarm()
     await asyncio.sleep(1000)

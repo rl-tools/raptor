@@ -69,6 +69,7 @@ class Crazyflie(Drone):
         self.disarmed = False
         self.last_pose_callback = None
         self.pose_callback_dts = []
+        self.POSITION_ERROR_CLIP = 0.3
     def _mocap_callback(self, msg):
         now = time.time()
         if self.last_pose_callback is not None and (now - self.last_pose_callback < 0.1):
@@ -80,7 +81,8 @@ class Crazyflie(Drone):
         self.last_pose_callback = now
         pose = msg['pose']
         position = [pose['position']['x'], pose['position']['y'], pose['position']['z']]
-        print(f"vicon pos: {position[0]:.2f} {position[1]:.2f} {position[2]:.2f} {1/np.mean(self.pose_callback_dts):.2f} Hz", file=mux[1])
+        self.orientation = [pose['orientation']['w'], pose['orientation']['x'], pose['orientation']['y'], pose['orientation']['z']]
+        # print(f"vicon pos: {position[0]:.2f} {position[1]:.2f} {position[2]:.2f} {1/np.mean(self.pose_callback_dts):.2f} Hz", file=mux[1])
         self.scf.cf.extpos.send_extpose(
             pose['position']['x'],
             pose['position']['y'],
@@ -114,6 +116,11 @@ class Crazyflie(Drone):
             orientation = np.array([0, 0, 0, 1])
             angular_velocity = np.zeros(3)
             linear_acceleration = np.zeros(3)
+            if self.position is not None:
+                diff = position - self.position
+                diff = np.clip(diff, -self.POSITION_ERROR_CLIP, self.POSITION_ERROR_CLIP)
+                position = self.position + diff
+            print(f"cmd {'  '.join([f'{float(p):.2}' for p in position])}", file=mux[3])
             self.scf.cf.commander.send_full_state_setpoint(position, velocity, linear_acceleration, orientation, *angular_velocity)
 
     async def goto(self, target_input, distance_threshold=0.15, timeout=None, relative=True):

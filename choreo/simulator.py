@@ -83,7 +83,7 @@ class Simulator:
                 action = self.policy.evaluate_step(self.observation[:, :22])
                 for i in range(self.num_drones()):
                     if not self.armed[i]:
-                        action[i, :] = 0
+                        action[i, :] = -1 
                 dts = self.vector.step(self.device, self.env, self.params, self.state, action, self.next_state, self.rng)
                 for i in range(self.num_drones()):
                     if self.next_state.states[i].position[2] < 0:
@@ -97,11 +97,11 @@ class Simulator:
                             self.next_state.states[i].angular_velocity[:] *= 0.95
                             if self.arming_times[i] is not None and self.arming_times[i] + self.ARMING_TIMEOUT < now and i < len(self.clients):
                                 self.armed[i] = False
-                                self.clients[i]._disarm_callback()
+                                await self.clients[i]._disarm_callback()
                 self.state.assign(self.next_state)
                 state_action_message = self.vector.set_state_action_message(self.device, self.env, self.params, self.ui, self.state, action)
                 for i, client in enumerate(self.clients):
-                    client._odometry_callback(self.state.states[i].position, self.state.states[i].linear_velocity)
+                    client._mocap_callback(self.state.states[i].position, self.state.states[i].linear_velocity)
                 await websocket.send(state_action_message)
                 await asyncio.sleep(dts[-1])
 
@@ -136,11 +136,11 @@ class SimulatedDrone(Drone):
             self.disarm_sink()
         else:
             raise ValueError("Disarm sink not set")
-    def _disarm_callback(self):
-        self.disarm()
+    async def _disarm_callback(self):
+        await self.disarm()
 
-    def _odometry_callback(self, position, velocity):
-        self.odometry_callback(position, velocity)
+    def _mocap_callback(self, position, velocity):
+        self._odometry_callback(position, velocity)
     
     def _forward_command(self, position, velocity):
         if self.command_sink:

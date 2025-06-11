@@ -7,13 +7,13 @@ class Drone:
         self.position = None
         self.velocity = None
         print(f"Client {name if name else '{unnamed}'} initialized", file=self.stdout)
-    def odometry_callback(self, position, velocity):
+    def _odometry_callback(self, position, velocity):
         self.position = position
         self.velocity = velocity
     async def arm(self):
         await self._arm()
     async def disarm(self):
-        await self._arm()
+        await self._disarm()
     def command(self, position, velocity):
         # print(f"cmd {'  '.join([f'{float(p):.2}' for p in position])}", file=self.stdout)
         self._forward_command(position, velocity)
