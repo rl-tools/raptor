@@ -7,6 +7,7 @@ class Drone:
         self.position = None
         self.velocity = None
         print(f"Client {name if name else '{unnamed}'} initialized", file=self.stdout)
+        self.name = name
     def _odometry_callback(self, position, velocity):
         self.position = position
         self.velocity = velocity

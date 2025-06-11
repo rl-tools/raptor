@@ -10,8 +10,9 @@ import l2f
 import os
 import deadman
 from trajectories.lissajous_uniform import lissajous_uniform, plot_lissajous
-from crazyflie import Crazyflie
+from crazyflie import Crazyflie, swarm_factory
 from mocap import Vicon
+import cflib
 np.random.seed(42)
 
 class Behavior:
@@ -98,6 +99,7 @@ class Behavior:
 
 
 async def main():
+    cflib.crtp.init_drivers()
     mocap = Vicon()
     global simulator
     RANDOM_CLOSE_CALLS = False
@@ -145,20 +147,25 @@ async def main():
     set_parameters(2, "crazyflie")
     set_parameters(3, "crazyflie")
 
-    vehicle_configs = [
+    crazyflie_configs = [
+        {
+            "name": "crazyflie_bl",
+            "type": Crazyflie,
+            "kwargs": {"uri": "radio://0/80/2M/E7E7E7E7E9"},
+            "mocap": "/vicon/crazyflie_bl/pose",
+        },
         {
             "name": "crazyflie",
             "type": Crazyflie,
             "kwargs": {"uri": "radio://0/80/2M/E7E7E7E7E7"},
-            # "kwargs": {"uri": "radio://0/80/2M/E7E7E7E7E8"},
             "mocap": "/vicon/crazyflie/pose",
-            # "mocap": None,
-        }
+        },
     ]
-    crazyflie = vehicle_configs[0]["type"](**vehicle_configs[0]["kwargs"])
-    crazyflie.learned_controller = True
-    mocap.add(crazyflie, vehicle_configs[0]["mocap"])
-    clients = [*simulator_clients[:-1], crazyflie]
+    crazyflies = swarm_factory(crazyflie_configs) #[cfg["type"](**cfg["kwargs"]) for cfg in crazyflie_configs]
+    for cfg, crazyflie in zip(crazyflie_configs, crazyflies):
+        mocap.add(crazyflie, cfg["mocap"])
+        crazyflie.learned_controller = True
+    clients = [*simulator_clients[:-len(crazyflies)], *crazyflies]
     # clients = simulator_clients
     
     # clients[0].safety_distance = 0.5
@@ -167,10 +174,14 @@ async def main():
         tick = 0
         dt = 0.01
         while True:
-            simulator.state.states[-1].position = crazyflie.position
-            simulator.state.states[-1].linear_velocity = crazyflie.velocity
-            simulator.state.states[-1].orientation = crazyflie.orientation
-            simulator.state.states[-1].angular_velocity = np.array([0, 0, 0])
+            for i, crazyflie in enumerate(crazyflies):
+                client_number = len(clients) - len(crazyflies) + i
+                if crazyflie.position is None or crazyflie.velocity is None or crazyflie.orientation is None:
+                    continue
+                simulator.state.states[client_number].position = crazyflie.position
+                simulator.state.states[client_number].linear_velocity = crazyflie.velocity
+                simulator.state.states[client_number].orientation = crazyflie.orientation
+                simulator.state.states[client_number].angular_velocity = np.array([0, 0, 0])
             if RANDOM_CLOSE_CALLS and tick % 100 == 0:
                 min1 = np.random.randint(0, len(clients))
                 min2 = np.random.choice([i for i in range(len(clients)) if i != min1])
