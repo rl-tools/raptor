@@ -13,10 +13,9 @@ from cflib.crazyflie.console import Console
 import numpy as np
 import time
 import asyncio
-import sdl2
-import sdl2.ext
 import roslibpy
 from muxify import Muxify
+import deadman
 mux = Muxify(5, flush_interval=0.01)
 
 
@@ -26,8 +25,6 @@ def send_learned_policy_packet(cf):
     pk.channel = META_COMMAND_CHANNEL
     pk.data = struct.pack('<B', 1)
     cf.send_packet(pk)
-
-deadman_trigger = False
 
 class Crazyflie:
     def __init__(self, uri='radio://0/80/2M/E7E7E7E7E7'):
@@ -101,7 +98,7 @@ class Crazyflie:
     
     async def main(self):
         while True:
-            if not deadman_trigger:
+            if not deadman.trigger:
                 print("disarming", file=mux[3])
                 self.scf.cf.platform.send_arming_request(False)
             elif self.learned_controller:
@@ -139,35 +136,6 @@ class Crazyflie:
     
 
 
-async def deadman_monitor():
-    global deadman_trigger
-    sdl2.SDL_Init(sdl2.SDL_INIT_JOYSTICK)
-    sdl2.SDL_JoystickEventState(sdl2.SDL_ENABLE)
-    njoy = sdl2.SDL_NumJoysticks()
-    print(f"Found {njoy} joystick(s)")
-
-    if njoy == 0:
-        print("No joystick found")
-        exit(1)
-
-    joy = sdl2.SDL_JoystickOpen(0)
-
-    event = sdl2.SDL_Event()
-    while True:
-        deadman_trigger_now = deadman_trigger 
-        while sdl2.SDL_PollEvent(event) != 0:
-            if event.type == sdl2.SDL_JOYBUTTONDOWN:
-                deadman_trigger_now = True
-            elif event.type == sdl2.SDL_JOYBUTTONUP:
-                deadman_trigger_now = False
-                break
-        if deadman_trigger != deadman_trigger_now:
-            deadman_trigger = deadman_trigger_now
-            if deadman_trigger:
-                print("Deadman trigger pressed")
-            else:
-                print("Deadman trigger released")
-        await asyncio.sleep(0.01)
 
 vehicle_configs = [
     {
@@ -181,12 +149,10 @@ vehicle_configs = [
 ]
 
 async def main():
-    global deadman_trigger
+    deadman.run_deadman_monitor()
     cflib.crtp.init_drivers()
     ros = roslibpy.Ros(host='localhost', port=9090)
     ros.run(timeout=5)
-    loop = asyncio.get_event_loop()
-    loop.create_task(deadman_monitor())
 
     vehicles = []
     for config in vehicle_configs:
@@ -200,7 +166,7 @@ async def main():
         await asyncio.sleep(0.1)
     vehicle = vehicles[0]
     print("Waiting for deadman trigger")
-    while not deadman_trigger:
+    while not deadman.trigger:
         await asyncio.sleep(0.1)
     initial_position = np.array(vehicle.position)
     print(f"Initial position: {initial_position[0]:.2f} {initial_position[1]:.2f} {initial_position[2]:.2f}")
