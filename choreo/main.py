@@ -5,6 +5,7 @@ import asyncio
 import roslibpy
 import deadman
 from mux import mux
+from mocap import Vicon
 
 from crazyflie import Crazyflie
     
@@ -17,22 +18,22 @@ vehicle_configs = [
         "type": Crazyflie,
         "kwargs": {"uri": "radio://0/80/2M/E7E7E7E7E7"},
         # "kwargs": {"uri": "radio://0/80/2M/E7E7E7E7E8"},
-        "mocap_topic": "/vicon/crazyflie/pose",
+        "mocap": "/vicon/crazyflie/pose",
         # "mocap_topic": None,
     }
 ]
 
 async def main():
     deadman.run_deadman_monitor()
+    mocap = Vicon()
     ros = roslibpy.Ros(host='localhost', port=9090)
     ros.run(timeout=5)
 
     vehicles = []
     for config in vehicle_configs:
         vehicle = config["type"](**config["kwargs"])
-        if config["mocap_topic"] is not None:
-            listener = roslibpy.Topic(ros, config["mocap_topic"], 'geometry_msgs/PoseStamped', throttle_rate=10)
-            listener.subscribe(vehicle.pose_callback)
+        if "mocap" in config and config["mocap"] is not None:
+            mocap.add(vehicle, config["mocap"])
         vehicles.append(vehicle)
     print("Waiting for vehicles to be located")
     while not all([v.position is not None for v in vehicles]):
