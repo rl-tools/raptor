@@ -110,7 +110,7 @@ class Crazyflie(Drone):
             await asyncio.sleep(0.05)
             # self.position = self.scf.cf.position_estimator._position
             # print(f"Position: {self.position}")
-    async def _forward_command(self, position, velocity):
+    def _forward_command(self, position, velocity):
             orientation = np.array([0, 0, 0, 1])
             angular_velocity = np.zeros(3)
             linear_acceleration = np.zeros(3)

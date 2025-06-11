@@ -26,8 +26,6 @@ vehicle_configs = [
 async def main():
     deadman.run_deadman_monitor()
     mocap = Vicon()
-    ros = roslibpy.Ros(host='localhost', port=9090)
-    ros.run(timeout=5)
 
     vehicles = []
     for config in vehicle_configs:

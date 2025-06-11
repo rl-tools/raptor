@@ -3,7 +3,7 @@ import asyncio
 
 trigger = False
 
-async def deadman_monitor():
+async def monitor():
     global trigger
     sdl2.SDL_Init(sdl2.SDL_INIT_JOYSTICK)
     sdl2.SDL_JoystickEventState(sdl2.SDL_ENABLE)
@@ -35,4 +35,4 @@ async def deadman_monitor():
 
 def run_deadman_monitor():
     loop = asyncio.get_event_loop()
-    loop.create_task(deadman_monitor())
+    loop.create_task(monitor())
