@@ -90,7 +90,8 @@ class Behavior:
         return drones_in_avoidance, (new_target_positions, new_target_velocities)
     
     def send_commands(self):
-        drones_in_avoidance, (target_positions, target_velocities) = self.avoid_collisions(self.target_positions, self.target_velocities)
+        # drones_in_avoidance, (target_positions, target_velocities) = self.avoid_collisions(self.target_positions, self.target_velocities)
+        target_positions, target_velocities = self.target_positions, self.target_velocities
         for client, target_position, target_velocity in zip(self.clients, target_positions, target_velocities):
             client.command(target_position, target_velocity)
 

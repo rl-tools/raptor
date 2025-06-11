@@ -69,7 +69,7 @@ class Crazyflie(Drone):
         self.disarmed = False
         self.last_pose_callback = None
         self.pose_callback_dts = []
-        self.POSITION_ERROR_CLIP = 0.3
+        self.POSITION_ERROR_CLIP = 0.5
     def _mocap_callback(self, msg):
         now = time.time()
         if self.last_pose_callback is not None and (now - self.last_pose_callback < 0.1):
