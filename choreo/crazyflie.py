@@ -90,7 +90,7 @@ class Crazyflie(Drone):
         self.pose_callback_dts = []
         self.POSITION_ERROR_CLIP = 0.5
     def _mocap_callback(self, msg):
-        pose = msg['pose']
+        pose = msg['pose']["pose"]
         position = [pose['position']['x'], pose['position']['y'], pose['position']['z']]
         self.orientation = [pose['orientation']['w'], pose['orientation']['x'], pose['orientation']['y'], pose['orientation']['z']]
         if self.odometry_source == "mocap":

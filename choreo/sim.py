@@ -11,6 +11,7 @@ import os
 import deadman
 from trajectories.lissajous_uniform import lissajous_uniform, plot_lissajous
 from crazyflie import Crazyflie, swarm_factory
+from px4 import PX4
 from mocap import Vicon
 import cflib
 np.random.seed(42)
@@ -42,18 +43,21 @@ class Behavior:
             await client.arm()
             self.send_commands()
             await asyncio.sleep(0.10)
-        print("Clients armed, starting behavior")
+        print("Clients armed")
         tick = 0
         EPSILON = 0.15
+        print("Waiting for clients to reach initial positions")
         while not all([np.linalg.norm(client.position - self.target_positions[i]) < EPSILON for i, client in enumerate(self.clients)]):
             self.send_commands()
             await asyncio.sleep(0.1)
             tick += 1
+        print("Starting behavior")
         t = 0
         dt = 0.1
         cumsum_spacing = np.cumsum(self.spacing)
         while True:
             in_trajectory = np.sum(t > cumsum_spacing)
+            print(f"In trajectory: {in_trajectory}, t: {t:.2f}, tick: {tick}")
             self.target_positions[in_trajectory:] = self.initial_target_positions[:-in_trajectory] if in_trajectory > 0 else self.initial_target_positions
             for i, client in enumerate(self.clients):
                 if t > cumsum_spacing[i]:
@@ -103,7 +107,7 @@ async def main():
     mocap = Vicon()
     global simulator
     RANDOM_CLOSE_CALLS = False
-    scale = 1.5
+    scale = 1.0
     lissajous_parameters = dict(A=1.5*scale, B=0.5*scale, duration=20)
     initial_positions = np.array([
         [0, 0., 0],
@@ -111,7 +115,7 @@ async def main():
         [-0.5, -1.5, 0],
         [-1.0, -1.5, 0]
     ])
-    spacing = np.array([0, 2.5, 2, 1])
+    spacing = np.array([2, 2, 2.5, 1])
     PLOT = False
     # PLOT = True
     if PLOT:
@@ -152,49 +156,56 @@ async def main():
             "name": "crazyflie_bl",
             "type": Crazyflie,
             "kwargs": {"uri": "radio://0/80/2M/E7E7E7E7E9"},
-            "mocap": "/vicon/crazyflie_bl/pose",
+            "mocap": "/vicon/crazyflie_bl/odom",
         },
         {
             "name": "crazyflie",
             "type": Crazyflie,
             "kwargs": {"uri": "radio://0/80/2M/E7E7E7E7E7"},
-            "mocap": "/vicon/crazyflie/pose",
+            "mocap": "/vicon/crazyflie/odom",
         },
     ]
-    crazyflies = swarm_factory(crazyflie_configs) #[cfg["type"](**cfg["kwargs"]) for cfg in crazyflie_configs]
-    for cfg, crazyflie in zip(crazyflie_configs, crazyflies):
-        mocap.add(crazyflie, cfg["mocap"])
-        crazyflie.learned_controller = True
-    clients = [*simulator_clients[:-len(crazyflies)], *crazyflies]
+    USE_CRAZYFLIES = False
+    USE_PX4 = True
+    crazyflies = []
+    if USE_CRAZYFLIES:
+        crazyflies = swarm_factory(crazyflie_configs) #[cfg["type"](**cfg["kwargs"]) for cfg in crazyflie_configs]
+        for cfg, crazyflie in zip(crazyflie_configs, crazyflies):
+            mocap.add(crazyflie, cfg["mocap"])
+            crazyflie.learned_controller = True
+    px4_configs = [
+        {
+            "name": "race",
+            "type": PX4,
+            "kwargs": {"uri": "udp:localhost:14551"},
+            "mocap": "/vicon/race_jonas/odom",
+        },
+    ]
+    px4s = []
+    if USE_PX4:
+        for cfg in px4_configs:
+            px4 = PX4(name=cfg["name"], **cfg["kwargs"])
+            px4s.append(px4)
+            mocap.add(px4, cfg["mocap"])
+
+    # clients = [*px4s, *crazyflies]
+    # clients = [*simulator_clients[:-len(clients)], *clients]
     # clients = simulator_clients
+
+    clients = [simulator_clients[0], px4s[0], simulator_clients[2], simulator_clients[3]]
     
-    # clients[0].safety_distance = 0.5
     behavior = Behavior(clients, lissajous_parameters=lissajous_parameters, spacing=spacing, height=0.3)
     async def loop():
         tick = 0
         dt = 0.01
         while True:
-            for i, crazyflie in enumerate(crazyflies):
-                client_number = len(clients) - len(crazyflies) + i
-                if crazyflie.position is None or crazyflie.velocity is None or crazyflie.orientation is None:
+            for i, client in enumerate(clients):
+                if client.simulated:
                     continue
-                simulator.state.states[client_number].position = crazyflie.position
-                simulator.state.states[client_number].linear_velocity = crazyflie.velocity
-                simulator.state.states[client_number].orientation = crazyflie.orientation
-                simulator.state.states[client_number].angular_velocity = np.array([0, 0, 0])
-            if RANDOM_CLOSE_CALLS and tick % 100 == 0:
-                min1 = np.random.randint(0, len(clients))
-                min2 = np.random.choice([i for i in range(len(clients)) if i != min1])
-                if tick == 100 * 3:
-                    positions = np.array([s.position for s in simulator.state.states])
-                    distances = np.linalg.norm(positions[:, None] - positions, axis=2)
-                    distances[np.arange(len(positions)), np.arange(len(positions))] = np.inf
-                    flat_index = np.argmin(distances)
-                    min1, min2 = np.unravel_index(flat_index, distances.shape)
-                pos1, pos2 = np.array(simulator.state.states[min1].position), np.array(simulator.state.states[min2].position)
-                diff = pos2 - pos1
-                simulator.state.states[min1].position = pos1 + diff * 0.25
-                simulator.state.states[min2].position = pos2 - diff * 0.25
+                simulator.state.states[i].position = client.position
+                simulator.state.states[i].linear_velocity = client.velocity
+                simulator.state.states[i].orientation = client.orientation
+                simulator.state.states[i].angular_velocity = np.array([0, 0, 0])
                 
             await asyncio.sleep(dt)
             tick += 1

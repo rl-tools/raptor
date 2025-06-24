@@ -114,6 +114,7 @@ class SimulatedDrone(Drone):
         self.arm_sink = None
         self.disarm_sink = None
         self.safety_distance = 0.2
+        self.simulated = True
 
         simulator.register_client(self)
 
