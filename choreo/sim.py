@@ -165,8 +165,10 @@ async def main():
             "mocap": "/vicon/crazyflie/odom",
         },
     ]
-    USE_CRAZYFLIES = False
+    USE_CRAZYFLIES = True
     USE_PX4 = True
+    # USE_CRAZYFLIES = False
+    # USE_PX4 = False
     crazyflies = []
     if USE_CRAZYFLIES:
         crazyflies = swarm_factory(crazyflie_configs) #[cfg["type"](**cfg["kwargs"]) for cfg in crazyflie_configs]
@@ -192,7 +194,10 @@ async def main():
     # clients = [*simulator_clients[:-len(clients)], *clients]
     # clients = simulator_clients
 
-    clients = [simulator_clients[0], px4s[0], simulator_clients[2], simulator_clients[3]]
+    # clients = [simulator_clients[0], px4s[0], simulator_clients[2], simulator_clients[3]]
+    # clients = [simulator_clients[0], simulator_clients[1], crazyflies[0], simulator_clients[3]]
+    clients = [simulator_clients[0], px4s[0], crazyflies[0], crazyflies[1]]
+    # clients = [simulator_clients[0], simulator_clients[1], simulator_clients[2], crazyflies[0]]
     
     behavior = Behavior(clients, lissajous_parameters=lissajous_parameters, spacing=spacing, height=0.3)
     async def loop():
@@ -200,7 +205,7 @@ async def main():
         dt = 0.01
         while True:
             for i, client in enumerate(clients):
-                if client.simulated:
+                if client.simulated or client.position is None or client.velocity is None:
                     continue
                 simulator.state.states[i].position = client.position
                 simulator.state.states[i].linear_velocity = client.velocity

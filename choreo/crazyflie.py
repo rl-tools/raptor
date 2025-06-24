@@ -69,7 +69,7 @@ class Crazyflie(Drone):
                 self._odometry_callback(position, velocity)
 
             if self.position_number % 1 == 0:
-                print(f"log  pos: {self.position[0]:.2f} {self.position[1]:.2f} {self.position[2]:.2f}", file=mux[2])
+                print(f"log  pos: {position[0]:.2f} {position[1]:.2f} {position[2]:.2f}", file=mux[2])
             self.position_number += 1
             # self.position = np.array([x, y, z])
             # print(f"Position: {self.position}")
