@@ -27,16 +27,12 @@
             "justMyCode": false
         },
         {
-            "name": "elrs",
+            "name": "betaflight",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/choreo/elrs.py",
+            "program": "${workspaceFolder}/choreo/betaflight.py",
             "console": "integratedTerminal",
             "justMyCode": false,
-            "args": [
-                "/dev/ttyACM0",
-                "921600",
-            ]
         }
     ]
 }
