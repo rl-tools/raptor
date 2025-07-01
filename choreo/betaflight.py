@@ -38,7 +38,7 @@ from drone import Drone
 
 
 class Betaflight(Drone):
-    def __init__(self, uri='/dev/ttyUSB0', BAUD=921600, rate=50, odometry_source="mocap", home_position=None, **kwargs):
+    def __init__(self, uri='/dev/ttyUSB0', BAUD=921600, rate=50, odometry_source="mocap", **kwargs):
         super().__init__(**kwargs)
         self.odometry_source = odometry_source
         self.orientation = None
@@ -47,7 +47,6 @@ class Betaflight(Drone):
         self.target_position = None
         self.target_velocity = None
         self.elrs = ELRS(uri, baud=BAUD, rate=rate, telemetry_callback=self._telemetry_callback)
-        self.home_position = home_position
         asyncio.create_task(self.elrs.start())
 
 
@@ -64,8 +63,6 @@ class Betaflight(Drone):
     def _mocap_callback(self, msg):
         pose = msg['pose']["pose"]
         position = [pose['position']['x'], pose['position']['y'], pose['position']['z']]
-        if self.home_position is not None:
-            position = np.array(position) - np.array(self.home_position)
         twist = msg['twist']["twist"]
         self.velocity = [twist['linear']['x'], twist['linear']['y'], twist['linear']['z']]
         self.orientation = [pose['orientation']['w'], pose['orientation']['x'], pose['orientation']['y'], pose['orientation']['z']]
@@ -86,7 +83,7 @@ class Betaflight(Drone):
     
     async def main(self):
         while True:
-            if self.orientation is None or self.position is None or self.velocity is None:
+            if self.orientation is None or self.position is None or self.velocity is None or self.target_position is None or self.target_velocity is None:
                 continue
             w_m, z_m = self.orientation[0], self.orientation[3]
             if w_m < 0:
@@ -97,10 +94,15 @@ class Betaflight(Drone):
                 continue
             angle_transmission = 2 * np.arctan2(z_m / d_m, w_m / d_m) / np.pi
             print(f"angle transmission: {angle_transmission:.2f}")
+            relative_position = np.array(self.position) - np.array(self.target_position)
+            relative_velocity = np.array(self.velocity) - np.array(self.target_velocity)
+            def to_channel(value):
+                return np.clip(value, -1, 1) * (RC_CHANNEL_MAX - RC_CHANNEL_MIN) / 2 + (RC_CHANNEL_MAX + RC_CHANNEL_MIN) / 2
             output = [
-                np.clip(np.array([self.position[0], self.position[1], self.position[2], angle_transmission]), -1, 1) * (RC_CHANNEL_MAX - RC_CHANNEL_MIN) / 2 + (RC_CHANNEL_MAX + RC_CHANNEL_MIN) / 2, # AETR
-                [deadman.trigger * RC_CHANNEL_MAX], # AUX1
-                np.clip([self.velocity[0], self.velocity[1], self.velocity[2]], -1, 1) * (RC_CHANNEL_MAX - RC_CHANNEL_MIN) / 2 + (RC_CHANNEL_MAX + RC_CHANNEL_MIN) / 2 # AUX2-4
+                to_channel(relative_position), # AET
+                to_channel([angle_transmission]), # R
+                [-1 if not deadman.trigger else 1], # AUX1
+                to_channel(relative_velocity) # AUX2-4
             ]
             self.elrs.set_channels(np.concatenate(output).astype(int).tolist())
             await asyncio.sleep(0.01)
@@ -134,8 +136,9 @@ class Betaflight(Drone):
 
 async def main():
     from mocap import Vicon
-    home_position = [0.8263353102351394, -2.697263628239365, 0.791003923163777]
-    betaflight = Betaflight(uri='/dev/ttyUSB0', BAUD=921600, rate=50, odometry_source="mocap", home_position=home_position)
+    target_position = [0.8263353102351394, -2.697263628239365, 0.791003923163777]
+    betaflight = Betaflight(uri='/dev/ttyUSB0', BAUD=921600, rate=50, odometry_source="mocap")
+    betaflight._forward_command(target_position, [0, 0, 0])
     asyncio.create_task(betaflight.main())
     mocap = Vicon()
     mocap.add(betaflight, "/vicon/hummingbird/odom")
