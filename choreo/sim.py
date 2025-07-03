@@ -14,6 +14,7 @@ from crazyflie import Crazyflie, swarm_factory
 from px4 import PX4
 from mocap import Vicon
 import cflib
+import signal
 np.random.seed(42)
 
 class Behavior:
@@ -104,7 +105,11 @@ class Behavior:
 
 async def main():
     cflib.crtp.init_drivers()
-    mocap = Vicon()
+    mocap = Vicon("192.168.1.3", VELOCITY_CLIP=5)
+    def sigint_handler(signum, frame):
+        mocap.save_to_csv()
+        sys.exit(0)
+    signal.signal(signal.SIGINT, sigint_handler)
     global simulator
     RANDOM_CLOSE_CALLS = False
     scale = 1.0
@@ -156,18 +161,18 @@ async def main():
             "name": "crazyflie_bl",
             "type": Crazyflie,
             "kwargs": {"uri": "radio://0/80/2M/E7E7E7E7E9"},
-            "mocap": "/vicon/crazyflie_bl/odom",
+            "mocap": "crazyflie_bl",
         },
         {
             "name": "crazyflie",
             "type": Crazyflie,
             "kwargs": {"uri": "radio://0/80/2M/E7E7E7E7E7"},
-            "mocap": "/vicon/crazyflie/odom",
+            "mocap": "crazyflie",
         },
     ]
-    USE_CRAZYFLIES = True
+    # USE_CRAZYFLIES = True
     USE_PX4 = True
-    # USE_CRAZYFLIES = False
+    USE_CRAZYFLIES = False
     # USE_PX4 = False
     crazyflies = []
     if USE_CRAZYFLIES:
@@ -179,8 +184,8 @@ async def main():
         {
             "name": "race",
             "type": PX4,
-            "kwargs": {"uri": "udp:localhost:14551"},
-            "mocap": "/vicon/race_jonas/odom",
+            "kwargs": {"uri": "tcp:192.168.8.4:5760"},
+            "mocap": "race_jonas",
         },
     ]
     px4s = []
@@ -188,15 +193,15 @@ async def main():
         for cfg in px4_configs:
             px4 = PX4(name=cfg["name"], **cfg["kwargs"])
             px4s.append(px4)
-            mocap.add(px4, cfg["mocap"])
+            mocap.add(cfg["mocap"], px4._mocap_callback)
 
     # clients = [*px4s, *crazyflies]
     # clients = [*simulator_clients[:-len(clients)], *clients]
     # clients = simulator_clients
 
-    # clients = [simulator_clients[0], px4s[0], simulator_clients[2], simulator_clients[3]]
+    clients = [simulator_clients[0], px4s[0], simulator_clients[2], simulator_clients[3]]
     # clients = [simulator_clients[0], simulator_clients[1], crazyflies[0], simulator_clients[3]]
-    clients = [simulator_clients[0], px4s[0], crazyflies[0], crazyflies[1]]
+    # clients = [simulator_clients[0], px4s[0], crazyflies[0], crazyflies[1]]
     # clients = [simulator_clients[0], simulator_clients[1], simulator_clients[2], crazyflies[0]]
     
     behavior = Behavior(clients, lissajous_parameters=lissajous_parameters, spacing=spacing, height=0.3)

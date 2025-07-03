@@ -101,7 +101,7 @@ class Betaflight(Drone):
             output = [
                 to_channel(relative_position), # AET
                 to_channel([angle_transmission]), # R
-                [-1 if not deadman.trigger else 1], # AUX1
+                to_channel([-1 if not deadman.trigger else 1]), # AUX1
                 to_channel(relative_velocity) # AUX2-4
             ]
             self.elrs.set_channels(np.concatenate(output).astype(int).tolist())
@@ -136,9 +136,10 @@ class Betaflight(Drone):
 
 async def main():
     from mocap import Vicon
-    target_position = [0.8263353102351394, -2.697263628239365, 0.791003923163777]
+    target_position = [0, 0, 0.2]
     betaflight = Betaflight(uri='/dev/ttyUSB0', BAUD=921600, rate=50, odometry_source="mocap")
     betaflight._forward_command(target_position, [0, 0, 0])
+    asyncio.create_task(deadman.monitor()),
     asyncio.create_task(betaflight.main())
     mocap = Vicon()
     mocap.add(betaflight, "/vicon/hummingbird/odom")
