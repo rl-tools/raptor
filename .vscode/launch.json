@@ -24,7 +24,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/choreo/sim.py",
             "console": "integratedTerminal",
-            "justMyCode": false
+            "justMyCode": false,
         },
         {
             "name": "betaflight",
@@ -33,6 +33,14 @@
             "program": "${workspaceFolder}/choreo/betaflight.py",
             "console": "integratedTerminal",
             "justMyCode": false,
-        }
+        },
+        {
+            "name": "individual_px4",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/choreo/individual_px4.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
     ]
 }

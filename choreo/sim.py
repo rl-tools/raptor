@@ -106,10 +106,11 @@ class Behavior:
 async def main():
     cflib.crtp.init_drivers()
     mocap = Vicon("192.168.1.3", VELOCITY_CLIP=5)
-    def sigint_handler(signum, frame):
+    def sig_handler(signum, frame):
         mocap.save_to_csv()
         sys.exit(0)
-    signal.signal(signal.SIGINT, sigint_handler)
+    signal.signal(signal.SIGINT, sig_handler)
+    signal.signal(signal.SIGTERM, sig_handler)
     global simulator
     RANDOM_CLOSE_CALLS = False
     scale = 1.0

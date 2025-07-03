@@ -25,12 +25,12 @@ class Vicon:
 
 
 class ViconObject:
-    def __init__(self, object_name, tracker, callback, VELOCITY_CLIP=None):
+    def __init__(self, object_name, tracker, callback, VELOCITY_CLIP=None, EXPECTED_FRAMERATE=100):
         self.object_name = object_name
         self.tracker = tracker
         self.callback = callback
         self.NUM_FRAMES = 100
-        self.NUM_FRAMES_CSV = 10000
+        self.NUM_FRAMES_CSV = 100000
         self.frames = []
         self.frame_times = []
         self.tick = 0
@@ -42,6 +42,8 @@ class ViconObject:
         self.last_position_time = None
         self.framerate = None
         self.VELOCITY_CLIP = VELOCITY_CLIP
+        self.EXPECTED_FRAMERATE = EXPECTED_FRAMERATE
+        self.poll_interval = 1/(EXPECTED_FRAMERATE * 3)
         asyncio.create_task(self.main())
     def save_to_csv(self):
         with open(f"vicon_data_{self.object_name}.csv", 'w', newline='') as csvfile:
@@ -73,6 +75,8 @@ class ViconObject:
                         # print(f"x: {position[0]:.2f}, y: {position[1]:.2f}, z: {position[2]:.2f}, roll: {euler_x:.2f}, pitch: {euler_y:.2f}, yaw: {euler_z:.2f}")
                         if self.last_position is not None:
                             frame_dt = now - self.last_position_time
+                            if frame_dt > 1.5/self.EXPECTED_FRAMERATE:
+                                print(f"High frame latency: {frame_dt}")
                             velocity = (position - self.last_position) / frame_dt
                             if self.VELOCITY_CLIP is not None:
                                 velocity = np.clip(velocity, -self.VELOCITY_CLIP, self.VELOCITY_CLIP)
@@ -98,4 +102,5 @@ class ViconObject:
                 self.framerate = len(self.frames) / (self.frame_times[-1] - self.frame_times[0])
                 print(f"Mocap: {self.object_name}Framerate: {self.framerate:.2f}")
 
-            await asyncio.sleep(0.001)
+            await asyncio.sleep(self.poll_interval)
+

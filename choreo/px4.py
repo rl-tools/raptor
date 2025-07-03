@@ -19,8 +19,6 @@ class PX4(Drone):
         self.odometry_source = odometry_source
 
         self.safety_distance = 0.15
-        loop = asyncio.get_event_loop()
-        loop.create_task(self.main())
 
         self.connection = mavutil.mavlink_connection(uri)
 
@@ -44,25 +42,24 @@ class PX4(Drone):
         self.POSITION_STD = 0.01 # m
         self.VELOCITY_STD = 0.01 # m/s
         self.ORIENTATION_STD = 5.0 # degrees
-        self.MOCAP_INTERVAL = 0.1
+        self.MOCAP_INTERVAL = 0.005
         self.latest_command = None
-    def _mocap_callback(self, msg):
-        secs  = msg["header"]["stamp"]["secs"]
-        nsecs = msg["header"]["stamp"]["nsecs"]
-        usec  = int(secs * 1e6 + nsecs / 1e3)
 
-        x,  y,  z  =  [msg["pose"]["pose"]["position"][x] for x in ["x", "y", "z"]]
-        x,  y,  z  =  x, -y, -z
-        qw, qx, qy, qz = [msg["pose"]["pose"]["orientation"][x] for x in ["w", "x", "y", "z"]]
+        loop = asyncio.get_event_loop()
+        loop.create_task(self.main())
+    def _mocap_callback(self, timestamp, position, orientation, velocity):
+        usec = int(timestamp * 1e6)
+
+        x,  y,  z  =  position[0], -position[1], -position[2]
+        qw, qx, qy, qz = orientation
         q = [qw, qx, qy, qz]
         self.orientation = q
         q_mav = [qw,  qx, -qy, -qz]
 
-        vx, vy, vz = [msg["twist"]["twist"]["linear"][x] for x in ["x", "y", "z"]]
-        vx, vy, vz =  vx, -vy, -vz
+        vx, vy, vz = velocity[0], -velocity[1], -velocity[2]
 
         if self.odometry_source == "mocap":
-            self._odometry_callback([x, -y, -z], [vx, -vy, -vz])
+            self._odometry_callback(position, velocity)
 
         pose_cov = np.full(21, np.nan,  dtype=np.float32)
         vel_cov  = np.full(21, np.nan,  dtype=np.float32)
@@ -91,7 +88,7 @@ class PX4(Drone):
                 self.mocap_callback_dts.append(dt)
                 self.mocap_callback_dts = self.mocap_callback_dts[-100:]
             self.last_mocap_callback = now
-            print(f"Forwarding position (FRD) to MAVLink: {x:.2f}, {y:.2f}, {z:.2f}, q: {qw:.2f}, {qx:.2f}, {qy:.2f}, {qz:.2f} {1/np.mean(self.mocap_callback_dts):.2f} Hz")
+            # print(f"Forwarding position (FRD) to MAVLink: {x:.2f}, {y:.2f}, {z:.2f}, q: {qw:.2f}, {qx:.2f}, {qy:.2f}, {qz:.2f} {1/np.mean(self.mocap_callback_dts):.2f} Hz")
     
     async def arm(self):
         pass
@@ -107,22 +104,10 @@ class PX4(Drone):
             if msg:
                 typ = msg.get_type()
 
-                position = None
-                velocity = None
                 if typ == 'LOCAL_POSITION_NED':
-                    # NED → your FRD convention (x forward, y left, z up)
                     position = np.array([ msg.x, -msg.y, -msg.z ])
                     velocity = np.array([ msg.vx, -msg.vy, -msg.vz ])
-
-                elif typ == 'VEHICLE_LOCAL_POSITION':
-                    position = np.array([ msg.x, -msg.y, -msg.z ])
-                    velocity = np.array([ msg.vx, -msg.vy, -msg.vz ])
-
-                # elif typ == 'ODOMETRY':
-                #     # PX4 sends ODOMETRY in NED already; fields are arrays
-                #     position = np.array(msg.position) * np.array([1, -1, -1])
-                #     velocity = np.array(msg.velocity) * np.array([1, -1, -1])
-                if position is not None and velocity is not None:
+                    print(f"Mavlink Position: {position[0]:.2f}  {position[1]:.2f}  {position[2]:.2f}  Velocity: {velocity[0]:.2f}  {velocity[1]:.2f}  {velocity[2]:.2f}")
                     if self.odometry_source != "mocap":
                         self._odometry_callback(position, velocity)
             if self.latest_command is not None:
@@ -135,7 +120,7 @@ class PX4(Drone):
                 #     diff = velocity - self.velocity
                 #     diff = np.clip(diff, -self.POSITION_ERROR_CLIP, self.POSITION_ERROR_CLIP)
                 #     velocity = self.velocity + diff
-                print(f"cmd {'  '.join([f'{float(p):.2}' for p in position])} {'  '.join(f'{float(p):.2}' for p in velocity)}", file=mux[3])
+                # print(f"cmd {'  '.join([f'{float(p):.2}' for p in position])} {'  '.join(f'{float(p):.2}' for p in velocity)}", file=mux[3])
                 position_ned = [position[0], -position[1], -position[2]]
                 # position_ned = [0, 0.8, -0.3]
                 velocity_ned = [velocity[0], -velocity[1], -velocity[2]]
@@ -166,7 +151,7 @@ class PX4(Drone):
             if self.position is not None:
                 target = target_input if relative else target_input
                 distance = np.linalg.norm(target - self.position)
-                print(f"Distance to target: {distance:.2f} m", file=mux[4])
+                # print(f"Distance to target: {distance:.2f} m", file=mux[4])
                 self._forward_command(target, [0, 0, 0])
             else:
                 print("Position not available yet")
