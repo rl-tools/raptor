@@ -38,7 +38,7 @@ class PX4(Drone):
         self.mocap_callback_dts = []
         self.POSITION_ERROR_CLIP = 0.5
         self.POSITION_STD = 0.01 # m
-        self.VELOCITY_STD = 0.01 # m/s
+        self.VELOCITY_STD = 0.03 # m/s
         self.ORIENTATION_STD = 5.0 # degrees
         self.MOCAP_INTERVAL = 0.001
         self.latest_command = None

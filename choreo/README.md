@@ -27,6 +27,7 @@ These might not be necessary conditions but this set of settings has been found 
   - Set `SER_TEL1_BAUD` to 921600
   - Use the `SanDisk 32GB Extreme U3` SD card to prevent logging dropouts
   - Configure just a few topics in the `etc/logging/logger_topics.txt`
+  - Check `listener rl_tools_policy_status` for the `visual_odometry_dt_std` and `visual_odometry_dt_max` 3000 and ~30000 (uS) are decent values respectively (when feeding Mocap at 100Hz)
 4. Laptop
   - Run forwarding script with `sudo nice -n-20`
   - Disconnect from Wifi
@@ -34,5 +35,6 @@ These might not be necessary conditions but this set of settings has been found 
 4. Vicon: 
   - 100Hz
   - Enable tracking
+  - Make `Tracker.exe` Real-time priority
 5. GL.inet MT300N-v2
   - Wifi running on `Mode: Client  Channel: 8 (2.447 GHz)  HT Mode: HT20` (though Channel 1 might be better with ELRS in the same room)

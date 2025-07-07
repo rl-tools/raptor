@@ -60,14 +60,12 @@ class Betaflight(Drone):
         self.POSITION_ERROR_CLIP = 0.5
     def _telemetry_callback(self, frame_type, data):
         pass
-    def _mocap_callback(self, msg):
-        pose = msg['pose']["pose"]
-        position = [pose['position']['x'], pose['position']['y'], pose['position']['z']]
-        twist = msg['twist']["twist"]
-        self.velocity = [twist['linear']['x'], twist['linear']['y'], twist['linear']['z']]
-        self.orientation = [pose['orientation']['w'], pose['orientation']['x'], pose['orientation']['y'], pose['orientation']['z']]
+    def _mocap_callback(self, timestamp, position, orientation, velocity, reset_counter):
+        self.velocity = velocity
+        self.orientation = orientation
+        self.position = position
         if self.odometry_source == "mocap":
-            self._odometry_callback(position, self.velocity if self.velocity is not None else np.zeros(3))
+            self._odometry_callback(position, velocity)
         now = time.time()
         if self.last_pose_callback is not None and (now - self.last_pose_callback < 0.1):
             return
@@ -82,8 +80,10 @@ class Betaflight(Drone):
         pass
     
     async def main(self):
+        tick = 0
         while True:
             if self.orientation is None or self.position is None or self.velocity is None or self.target_position is None or self.target_velocity is None:
+                await asyncio.sleep(0.01)
                 continue
             w_m, z_m = self.orientation[0], self.orientation[3]
             if w_m < 0:
@@ -93,7 +93,8 @@ class Betaflight(Drone):
             if d_m < 1e-6:
                 continue
             angle_transmission = 2 * np.arctan2(z_m / d_m, w_m / d_m) / np.pi
-            print(f"angle transmission: {angle_transmission:.2f}")
+            if tick % 100 == 0:
+                print(f"angle transmission: {angle_transmission:.2f}")
             relative_position = np.array(self.position) - np.array(self.target_position)
             relative_velocity = np.array(self.velocity) - np.array(self.target_velocity)
             def to_channel(value):
@@ -106,6 +107,7 @@ class Betaflight(Drone):
             ]
             self.elrs.set_channels(np.concatenate(output).astype(int).tolist())
             await asyncio.sleep(0.01)
+            tick += 1
     def _forward_command(self, position, velocity):
             self.target_position = position
             self.target_velocity = velocity
@@ -135,14 +137,18 @@ class Betaflight(Drone):
         pass
 
 async def main():
+    VICON_IP = "192.168.1.3"
     from mocap import Vicon
     target_position = [0, 0, 0.2]
     betaflight = Betaflight(uri='/dev/ttyUSB0', BAUD=921600, rate=50, odometry_source="mocap")
     betaflight._forward_command(target_position, [0, 0, 0])
     asyncio.create_task(deadman.monitor()),
     asyncio.create_task(betaflight.main())
-    mocap = Vicon()
-    mocap.add(betaflight, "/vicon/hummingbird/odom")
+    mocap = Vicon(VICON_TRACKER_IP=VICON_IP)
+    mocap.add("hummingbird", betaflight._mocap_callback)
+    while betaflight.position is None:
+        await asyncio.sleep(0.1)
+    betaflight._forward_command(betaflight.position, [0, 0, 0])
     while True:
         await asyncio.sleep(0.1)
 

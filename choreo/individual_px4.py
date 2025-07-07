@@ -29,7 +29,7 @@ async def main():
     print("Waiting for px4 position")
     while px4.position is None:
         await asyncio.sleep(0.1)
-    target_position = px4.position + np.array([0, 0, 0.3])
+    target_position = px4.position + np.array([0, 0, 0.2])
     print(f"Target position: {target_position}")
     while True:
         await px4.goto(target_position, distance_threshold=0.05)
