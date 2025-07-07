@@ -6,10 +6,10 @@ import numpy as np
 import sys
 
 # VICON_IP = "128.238.39.121"
-VICON_IP = "192.168.1.2"
+VICON_IP = "192.168.1.3"
 
 async def main():
-    mocap = Vicon(VICON_IP, VELOCITY_CLIP=5)
+    mocap = Vicon(VICON_IP, VELOCITY_CLIP=5, EXPECTED_FRAMERATE=100)
     def sig_handler(signum, frame):
         print("Saving mocap data")
         mocap.save_to_csv()
@@ -19,8 +19,8 @@ async def main():
     cfg = {
         "name": "race",
         "type": PX4,
-        # "kwargs": {"uri": "tcp:192.168.8.4:5760"},
-        "kwargs": {"uri": "udp:localhost:14550"},
+        "kwargs": {"uri": "tcp:192.168.8.4:5760"},
+        # "kwargs": {"uri": "udp:192.168.8.4:14550"},
         # "kwargs": {"uri": "/dev/ttyACM0"},
         "mocap": "race_jonas",
     }
@@ -29,7 +29,7 @@ async def main():
     print("Waiting for px4 position")
     while px4.position is None:
         await asyncio.sleep(0.1)
-    target_position = px4.position + np.array([0, 0, 0.1])
+    target_position = px4.position + np.array([0, 0, 0.3])
     print(f"Target position: {target_position}")
     while True:
         await px4.goto(target_position, distance_threshold=0.05)

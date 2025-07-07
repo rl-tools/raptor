@@ -4,12 +4,10 @@ import asyncio
 import time
 import numpy as np
 
-import deadman
-from mux import mux
-
 from drone import Drone
 
 from pymavlink import mavutil
+
 
 
 
@@ -42,13 +40,13 @@ class PX4(Drone):
         self.POSITION_STD = 0.01 # m
         self.VELOCITY_STD = 0.01 # m/s
         self.ORIENTATION_STD = 5.0 # degrees
-        self.MOCAP_INTERVAL = 0.005
+        self.MOCAP_INTERVAL = 0.001
         self.latest_command = None
 
         loop = asyncio.get_event_loop()
         loop.create_task(self.main())
-    def _mocap_callback(self, timestamp, position, orientation, velocity):
-        usec = int(timestamp * 1e6)
+    def _mocap_callback(self, timestamp, position, orientation, velocity, reset_counter):
+        usec = int(timestamp // 1e3)
 
         x,  y,  z  =  position[0], -position[1], -position[2]
         qw, qx, qy, qz = orientation
@@ -79,7 +77,7 @@ class PX4(Drone):
                 float('nan'), float('nan'), float('nan'),   # angular rates
                 pose_cov,
                 vel_cov,
-                0,                                         # reset_counter
+                reset_counter,
                 mavutil.mavlink.MAV_ESTIMATOR_TYPE_VISION,
                 100 # quality (100% confidence, 0-100)
             )

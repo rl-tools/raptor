@@ -44,6 +44,7 @@ class ViconObject:
         self.VELOCITY_CLIP = VELOCITY_CLIP
         self.EXPECTED_FRAMERATE = EXPECTED_FRAMERATE
         self.poll_interval = 1/(EXPECTED_FRAMERATE * 3)
+        self.reset_counter = 0
         asyncio.create_task(self.main())
     def save_to_csv(self):
         with open(f"vicon_data_{self.object_name}.csv", 'w', newline='') as csvfile:
@@ -60,7 +61,8 @@ class ViconObject:
             if result:
                 latency, frame, data = result
                 if len(self.frames) == 0 or frame != self.frames[-1]:
-                    now = time.time()
+                    now_ns = time.time_ns()
+                    now = now_ns / 1e9
                     self.frames.append(frame)
                     self.frame_times.append(now)
                     self.frames = self.frames[-self.NUM_FRAMES:]
@@ -77,6 +79,7 @@ class ViconObject:
                             frame_dt = now - self.last_position_time
                             if frame_dt > 1.5/self.EXPECTED_FRAMERATE:
                                 print(f"High frame latency: {frame_dt}")
+                                self.reset_counter += 1
                             velocity = (position - self.last_position) / frame_dt
                             if self.VELOCITY_CLIP is not None:
                                 velocity = np.clip(velocity, -self.VELOCITY_CLIP, self.VELOCITY_CLIP)
@@ -87,10 +90,11 @@ class ViconObject:
                         self.data_records = self.data_records[-self.NUM_FRAMES_CSV:]
                         self.last_position = position
                         self.last_position_time = now
-                        self.callback(now, position, orientation, velocity)
+                        self.callback(now_ns, position, orientation, velocity, self.reset_counter)
             if len(self.frames) > 1:
                 if(np.any(np.diff(self.frames) > 1)):
-                    print(f"Mocap: {self.object_name} frame Jump detected: {np.diff(self.frames)}")
+                    if np.argmax(np.diff(self.frames)) == len(self.frames) - 1:
+                        print(f"Mocap: {self.object_name} frame Jump detected: {np.argmax(np.diff(self.frames))} {self.frames}")
 
             current_second = int(time.time())
             tick_now = False
@@ -100,7 +104,7 @@ class ViconObject:
                 tick_now = True
             if tick_now and self.tick % 10 == 0 and len(self.frames) > 1:
                 self.framerate = len(self.frames) / (self.frame_times[-1] - self.frame_times[0])
-                print(f"Mocap: {self.object_name}Framerate: {self.framerate:.2f}")
+                print(f"Mocap: {self.object_name} Framerate: {self.framerate:.2f}")
 
             await asyncio.sleep(self.poll_interval)
 
