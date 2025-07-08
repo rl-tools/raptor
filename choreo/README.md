@@ -10,6 +10,7 @@ Using the `Jumper Aion ELRS 2.4G TX Nano`:
 - Enable Wifi in the menu
 - Go to `10.0.0.1/hardware.html` change pins: RX: 3  TX: 1 (note this will prohibit communication with the TX handset because it will listen on its own USB serial for CRSF communication)
 - Test using DeckTX (921600 Baud)
+- Disable Model Match (bind to normal transmitter with the ELRS Lua script, and disable Model match there).
 
 
 

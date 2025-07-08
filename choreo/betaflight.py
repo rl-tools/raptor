@@ -46,7 +46,7 @@ class Betaflight(Drone):
         self.velocity = None
         self.target_position = None
         self.target_velocity = None
-        self.elrs = ELRS(uri, baud=BAUD, rate=rate, telemetry_callback=self._telemetry_callback)
+        self.elrs = ELRS(uri, baud=BAUD, rate=rate, telemetry_callback=self._telemetry_callback, verbose=True)
         asyncio.create_task(self.elrs.start())
 
 
@@ -67,7 +67,7 @@ class Betaflight(Drone):
         if self.odometry_source == "mocap":
             self._odometry_callback(position, velocity)
         now = time.time()
-        if self.last_pose_callback is not None and (now - self.last_pose_callback < 0.1):
+        if self.last_pose_callback is not None and (now - self.last_pose_callback < 0.01):
             return
         if self.last_pose_callback is not None:
             dt = now - self.last_pose_callback
@@ -148,8 +148,22 @@ async def main():
     mocap.add("hummingbird", betaflight._mocap_callback)
     while betaflight.position is None:
         await asyncio.sleep(0.1)
-    betaflight._forward_command(betaflight.position, [0, 0, 0])
+    initial_position = betaflight.position.copy()
+    target_position = initial_position + np.array([0, 0, 0.2])
+    print(f"Initial position: {initial_position}")
+    print(f"Target position: {target_position}")
+
+    async def timer():
+        tick = 0
+        dt = 0.01
+        while True:
+            if tick*dt > 5:
+                betaflight.elrs.verbose = False
+            await asyncio.sleep(dt)
+            tick += 1
+    asyncio.create_task(timer())
     while True:
+        await betaflight.goto(target_position, distance_threshold=0.1)
         await asyncio.sleep(0.1)
 
 if __name__ == "__main__":
