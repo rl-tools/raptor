@@ -11,6 +11,8 @@ Using the `Jumper Aion ELRS 2.4G TX Nano`:
 - Go to `10.0.0.1/hardware.html` change pins: RX: 3  TX: 1 (note this will prohibit communication with the TX handset because it will listen on its own USB serial for CRSF communication)
 - Test using DeckTX (921600 Baud)
 - Disable Model Match (bind to normal transmitter with the ELRS Lua script, and disable Model match there).
+- Make sure the propeller directions (CW/CCW) are not inverted (front-left: CW, front-right: CCW, back-left: CCW, back-right: CW)
+- Use the LED colors if available to check if the Mocap feedback works. Set to mode Color and then modulate by e.g. "Roll" which is the x displacement in our Mocap over ELRS conventions
 
 
 
