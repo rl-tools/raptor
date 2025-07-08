@@ -62,7 +62,7 @@ class ViconObject:
                         if len(data) > 0 and len(self.frame_times) > 1:
                             _, _, x, y, z, euler_x, euler_y, euler_z = data[0]
                             position = np.array([x, y, z]) / 1000
-                            r = R.from_euler('xyz', [euler_x, euler_y, euler_z])
+                            r = R.from_euler('XYZ', [euler_x, euler_y, euler_z])
                             orientation_xyzw = r.as_quat()  # Returns [x, y, z, w]
                             orientation = [orientation_xyzw[3], orientation_xyzw[0], orientation_xyzw[1], orientation_xyzw[2]]
                             # print(f"x: {position[0]:.2f}, y: {position[1]:.2f}, z: {position[2]:.2f}, roll: {euler_x:.2f}, pitch: {euler_y:.2f}, yaw: {euler_z:.2f}")
