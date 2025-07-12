@@ -2,9 +2,7 @@ import struct
 import asyncio
 import time
 import numpy as np
-from elrs import ELRS
-from elrs.elrs import RC_CHANNEL_MIN, RC_CHANNEL_MAX
-
+import serial
 
 import deadman
 from mux import mux
@@ -37,8 +35,8 @@ from drone import Drone
 #     asyncio.run(main())
 
 
-class Betaflight(Drone):
-    def __init__(self, uri='/dev/ttyUSB0', BAUD=921600, rate=50, odometry_source="mocap", verbose=False,**kwargs):
+class M5StampFly(Drone):
+    def __init__(self, uri='/dev/serial/by-name/m5stamp-forwarder', BAUD=115200, rate=50, odometry_source="mocap", verbose=False,**kwargs):
         super().__init__(**kwargs)
         self.odometry_source = odometry_source
         self.orientation = None
@@ -46,8 +44,7 @@ class Betaflight(Drone):
         self.velocity = None
         self.target_position = None
         self.target_velocity = None
-        self.elrs = ELRS(uri, baud=BAUD, rate=rate, telemetry_callback=self._telemetry_callback, verbose=verbose)
-        asyncio.create_task(self.elrs.start())
+        self.serial = serial.Serial(uri, BAUD, timeout=1)
 
 
         self.position_number = 0
@@ -100,17 +97,13 @@ class Betaflight(Drone):
             relative_position = np.array(self.position) - np.array(self.target_position)
             relative_velocity = np.array(self.velocity) - np.array(self.target_velocity)
             if tick % 100 == 0:
-                print(f"angle transmission: {angle_transmission:.2f}")
+                # print(f"angle transmission: {angle_transmission:.2f}")
                 print(f"relative position: {relative_position[0]:.2f} {relative_position[1]:.2f} {relative_position[2]:.2f} velocity: {relative_velocity[0]:.2f} {relative_velocity[1]:.2f} {relative_velocity[2]:.2f}")
-            def to_channel(value):
-                return np.clip(value, -1, 1) * (RC_CHANNEL_MAX - RC_CHANNEL_MIN) / 2 + (RC_CHANNEL_MAX + RC_CHANNEL_MIN) / 2
-            output = [
-                to_channel(relative_position), # AET
-                to_channel([angle_transmission]), # R
-                to_channel([-1 if not deadman.trigger else 1]), # AUX1
-                to_channel(relative_velocity) # AUX2-4
-            ]
-            self.elrs.set_channels(np.concatenate(output).astype(int).tolist())
+                # print(f"orientation: {self.orientation[0]:.2f} {self.orientation[1]:.2f} {self.orientation[2]:.2f} {self.orientation[3]:.2f}")
+            data_to_send = f"{relative_position[0]:0.3f},{relative_position[1]:0.3f},{relative_position[2]:0.3f},{angle_transmission:0.3f},{relative_velocity[0]:0.3f},{relative_velocity[1]:0.3f},{relative_velocity[2]:0.3f},{int(deadman.trigger)}\n"
+            self.serial.write(data_to_send.encode())
+            # if(self.serial.in_waiting > 0):
+            #     print(self.serial.readline().decode())
             await asyncio.sleep(0.01)
             tick += 1
     def _forward_command(self, position, velocity):
@@ -118,14 +111,14 @@ class Betaflight(Drone):
             self.target_velocity = velocity
 
     async def goto(self, target_input, distance_threshold=0.15, timeout=None, relative=True):
-        print(f"Going to {target_input}")
+        # print(f"Going to {target_input}")
         distance = None
         start = time.time()
         while distance is None or distance > distance_threshold or (timeout is not None and time.time() - start < timeout) and not self.disarmed:
             if self.position is not None:
                 target = target_input if relative else target_input
                 distance = np.linalg.norm(target - self.position)
-                print(f"Distance to target: {distance:.2f} m", file=mux[4])
+                # print(f"Distance to target: {distance:.2f} m", file=mux[4])
                 self._forward_command(target, [0, 0, 0])
             else:
                 print("Position not available yet")
@@ -145,12 +138,12 @@ async def main():
     VICON_IP = "192.168.1.3"
     from mocap import Vicon
     target_position = [0, 0, 0.2]
-    betaflight = Betaflight(uri='/dev/ttyUSB0', BAUD=921600, rate=50, odometry_source="mocap", verbose=True)
+    betaflight = M5StampFly(rate=50, odometry_source="mocap", verbose=True)
     betaflight._forward_command(target_position, [0, 0, 0])
     asyncio.create_task(deadman.monitor()),
     asyncio.create_task(betaflight.main())
     mocap = Vicon(VICON_TRACKER_IP=VICON_IP)
-    mocap.add("hummingbird", betaflight._mocap_callback)
+    mocap.add("m5stampfly", betaflight._mocap_callback)
     while betaflight.position is None:
         await asyncio.sleep(0.1)
     initial_position = betaflight.position.copy()
@@ -158,15 +151,6 @@ async def main():
     print(f"Initial position: {initial_position}")
     print(f"Target position: {target_position}")
 
-    async def timer():
-        tick = 0
-        dt = 0.01
-        while True:
-            if tick*dt > 5:
-                betaflight.elrs.verbose = False
-            await asyncio.sleep(dt)
-            tick += 1
-    asyncio.create_task(timer())
     while True:
         await betaflight.goto(target_position, distance_threshold=0.1)
         await asyncio.sleep(0.1)

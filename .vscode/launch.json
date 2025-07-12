@@ -35,6 +35,14 @@
             "justMyCode": false,
         },
         {
+            "name": "m5stampfly",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/choreo/m5stampfly.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+        },
+        {
             "name": "individual_px4",
             "type": "debugpy",
             "request": "launch",
