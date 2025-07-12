@@ -12,6 +12,7 @@ import deadman
 from trajectories.lissajous_uniform import lissajous_uniform, plot_lissajous
 from crazyflie import Crazyflie, swarm_factory
 from px4 import PX4
+from betaflight import Betaflight
 from mocap import Vicon
 import cflib
 import signal
@@ -46,7 +47,7 @@ class Behavior:
             await asyncio.sleep(0.10)
         print("Clients armed")
         tick = 0
-        EPSILON = 0.15
+        EPSILON = 0.20
         print("Waiting for clients to reach initial positions")
         while not all([np.linalg.norm(client.position - self.target_positions[i]) < EPSILON for i, client in enumerate(self.clients)]):
             self.send_commands()
@@ -102,15 +103,10 @@ class Behavior:
             client.command(target_position, target_velocity)
 
 
-
+VICON_IP = "192.168.1.3"
 async def main():
     cflib.crtp.init_drivers()
-    mocap = Vicon("192.168.1.3", VELOCITY_CLIP=5)
-    def sig_handler(signum, frame):
-        mocap.save_to_csv()
-        sys.exit(0)
-    signal.signal(signal.SIGINT, sig_handler)
-    signal.signal(signal.SIGTERM, sig_handler)
+    mocap = Vicon(VICON_IP, VELOCITY_CLIP=5)
     global simulator
     RANDOM_CLOSE_CALLS = False
     scale = 1.0
@@ -171,10 +167,12 @@ async def main():
             "mocap": "crazyflie",
         },
     ]
-    # USE_CRAZYFLIES = True
-    USE_PX4 = True
+    USE_PX4 = False
+    # USE_PX4 = True
     USE_CRAZYFLIES = False
-    # USE_PX4 = False
+    # USE_CRAZYFLIES = True
+    # USE_BETAFLIGHT = False
+    USE_BETAFLIGHT = True
     crazyflies = []
     if USE_CRAZYFLIES:
         crazyflies = swarm_factory(crazyflie_configs) #[cfg["type"](**cfg["kwargs"]) for cfg in crazyflie_configs]
@@ -195,12 +193,27 @@ async def main():
             px4 = PX4(name=cfg["name"], **cfg["kwargs"])
             px4s.append(px4)
             mocap.add(cfg["mocap"], px4._mocap_callback)
+    
+    betaflight_configs = [
+        {
+            "name": "hummingbird",
+            "type": Betaflight,
+            "kwargs": {"uri": "/dev/ttyUSB0", "BAUD": 921600, "rate": 50, "odometry_source": "mocap"},
+            "mocap": "hummingbird",
+        },
+    ]
+    betaflights = []
+    if USE_BETAFLIGHT:
+        betaflights = [Betaflight(**cfg["kwargs"]) for cfg in betaflight_configs]
+        for cfg, betaflight in zip(betaflight_configs, betaflights):
+            mocap.add(cfg["mocap"], betaflight._mocap_callback)
 
     # clients = [*px4s, *crazyflies]
     # clients = [*simulator_clients[:-len(clients)], *clients]
     # clients = simulator_clients
 
-    clients = [simulator_clients[0], px4s[0], simulator_clients[2], simulator_clients[3]]
+    clients = [simulator_clients[0], betaflights[0], simulator_clients[2], simulator_clients[3]]
+    # clients = [simulator_clients[0], px4s[0], simulator_clients[2], simulator_clients[3]]
     # clients = [simulator_clients[0], simulator_clients[1], crazyflies[0], simulator_clients[3]]
     # clients = [simulator_clients[0], px4s[0], crazyflies[0], crazyflies[1]]
     # clients = [simulator_clients[0], simulator_clients[1], simulator_clients[2], crazyflies[0]]

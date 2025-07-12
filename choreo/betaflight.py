@@ -38,7 +38,7 @@ from drone import Drone
 
 
 class Betaflight(Drone):
-    def __init__(self, uri='/dev/ttyUSB0', BAUD=921600, rate=50, odometry_source="mocap", **kwargs):
+    def __init__(self, uri='/dev/ttyUSB0', BAUD=921600, rate=50, odometry_source="mocap", verbose=False,**kwargs):
         super().__init__(**kwargs)
         self.odometry_source = odometry_source
         self.orientation = None
@@ -46,7 +46,7 @@ class Betaflight(Drone):
         self.velocity = None
         self.target_position = None
         self.target_velocity = None
-        self.elrs = ELRS(uri, baud=BAUD, rate=rate, telemetry_callback=self._telemetry_callback, verbose=True)
+        self.elrs = ELRS(uri, baud=BAUD, rate=rate, telemetry_callback=self._telemetry_callback, verbose=verbose)
         asyncio.create_task(self.elrs.start())
 
 
@@ -64,6 +64,9 @@ class Betaflight(Drone):
         self.velocity = velocity
         self.orientation = orientation
         self.position = position
+        if self.target_position is None:
+            self.target_position = position
+            self.target_velocity = np.zeros(3)
         if self.odometry_source == "mocap":
             self._odometry_callback(position, velocity)
         now = time.time()
@@ -93,10 +96,12 @@ class Betaflight(Drone):
             if d_m < 1e-6:
                 continue
             angle_transmission = 2 * np.arctan2(z_m / d_m, w_m / d_m) / np.pi
-            if tick % 100 == 0:
-                print(f"angle transmission: {angle_transmission:.2f}")
+
             relative_position = np.array(self.position) - np.array(self.target_position)
             relative_velocity = np.array(self.velocity) - np.array(self.target_velocity)
+            if tick % 100 == 0:
+                print(f"angle transmission: {angle_transmission:.2f}")
+                print(f"relative position: {relative_position[0]:.2f} {relative_position[1]:.2f} {relative_position[2]:.2f} velocity: {relative_velocity[0]:.2f} {relative_velocity[1]:.2f} {relative_velocity[2]:.2f}")
             def to_channel(value):
                 return np.clip(value, -1, 1) * (RC_CHANNEL_MAX - RC_CHANNEL_MIN) / 2 + (RC_CHANNEL_MAX + RC_CHANNEL_MIN) / 2
             output = [
@@ -140,7 +145,7 @@ async def main():
     VICON_IP = "192.168.1.3"
     from mocap import Vicon
     target_position = [0, 0, 0.2]
-    betaflight = Betaflight(uri='/dev/ttyUSB0', BAUD=921600, rate=50, odometry_source="mocap")
+    betaflight = Betaflight(uri='/dev/ttyUSB0', BAUD=921600, rate=50, odometry_source="mocap", verbose=True)
     betaflight._forward_command(target_position, [0, 0, 0])
     asyncio.create_task(deadman.monitor()),
     asyncio.create_task(betaflight.main())
