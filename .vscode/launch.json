@@ -50,5 +50,13 @@
             "console": "integratedTerminal",
             "justMyCode": false
         },
+        {
+            "name": "deadman",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/choreo/deadman.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
     ]
 }

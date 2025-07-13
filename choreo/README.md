@@ -1,3 +1,12 @@
+### Serial Device Registry
+```
+sudo mkdir /dev/serial/by-name/
+sudo ln -s /dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_F4\:12\:FA\:DC\:98\:F8-if00 /dev/serial/by-name/m5stamp-forwarder
+sudo ln -s /dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_48\:CA\:43\:B6\:44\:48-if00 /dev/serial/by-name/m5stamp-uav
+sudo ln -s /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0 /dev/serial/by-name/elrs-transmitter1
+```
+
+
 ### ELRS
 
 Using the `Jumper Aion ELRS 2.4G TX Nano`:
@@ -41,3 +50,11 @@ These might not be necessary conditions but this set of settings has been found 
   - Make `Tracker.exe` Real-time priority
 5. GL.inet MT300N-v2
   - Wifi running on `Mode: Client  Channel: 8 (2.447 GHz)  HT Mode: HT20` (though Channel 1 might be better with ELRS in the same room)
+
+
+  ### Deadman Switch
+  Ikkegol footpedal:
+
+  ```
+  sudo gpasswd -a $USER input
+  ```

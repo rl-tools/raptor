@@ -145,9 +145,9 @@ async def main():
     VICON_IP = "192.168.1.3"
     from mocap import Vicon
     target_position = [0, 0, 0.2]
-    betaflight = Betaflight(uri='/dev/ttyUSB0', BAUD=921600, rate=50, odometry_source="mocap", verbose=True)
+    betaflight = Betaflight(uri='/dev/serial/by-name/elrs-transmitter1', BAUD=921600, rate=50, odometry_source="mocap", verbose=True)
     betaflight._forward_command(target_position, [0, 0, 0])
-    asyncio.create_task(deadman.monitor()),
+    asyncio.create_task(deadman.monitor(type="foot-pedal")),
     asyncio.create_task(betaflight.main())
     mocap = Vicon(VICON_TRACKER_IP=VICON_IP)
     mocap.add("hummingbird", betaflight._mocap_callback)
