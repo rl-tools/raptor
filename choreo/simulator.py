@@ -9,7 +9,7 @@ from drone import Drone
 class Simulator:
 
     def __init__(self, N_DRONES=4, MAX_POSITION_ERROR=0.5, MAX_VELOCITY_ERROR=0.5, ARMING_TIMEOUT=5):
-        self.vector = vector_selector[N_DRONES]
+        self.vector = vector_selector[8]
         self.MAX_POSITION_ERROR = MAX_POSITION_ERROR
         self.MAX_VELOCITY_ERROR = MAX_VELOCITY_ERROR
         self.ARMING_TIMEOUT = ARMING_TIMEOUT

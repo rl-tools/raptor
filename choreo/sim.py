@@ -110,15 +110,17 @@ async def main():
     mocap = Vicon(VICON_IP, VELOCITY_CLIP=5, EXPECTED_FRAMERATE=100)
     global simulator
     RANDOM_CLOSE_CALLS = False
-    scale = 1.0
+    scale = 1.5
     lissajous_parameters = dict(A=1.5*scale, B=0.5*scale, duration=20)
     initial_positions = np.array([
         [0, 0., 0],
         [0, -1.25, 0],
         [-0.5, -1.5, 0],
-        [-1.0, -1.5, 0]
+        [-1.0, -1.5, 0],
+        [-1.5, -1.5, 0],
+        [-2.0, -1.5, 0],
     ])
-    spacing = np.array([2, 2, 2, 2])
+    spacing = np.array([2, 2, 1.5, 1, 1, 1])
     PLOT = False
     # PLOT = True
     if PLOT:
@@ -168,14 +170,14 @@ async def main():
             "mocap": "crazyflie",
         },
     ]
-    USE_PX4 = True
-    # USE_PX4 = False
-    USE_CRAZYFLIES = True
-    # USE_CRAZYFLIES = False
-    USE_BETAFLIGHT = True
-    # USE_BETAFLIGHT = False
-    USE_M5STAMPFLY = True
-    # USE_M5STAMPFLY = False
+    # USE_PX4 = True
+    USE_PX4 = False
+    # USE_CRAZYFLIES = True
+    USE_CRAZYFLIES = False
+    # USE_BETAFLIGHT = True
+    USE_BETAFLIGHT = False
+    # USE_M5STAMPFLY = True
+    USE_M5STAMPFLY = False
     crazyflies = []
     if USE_CRAZYFLIES:
         crazyflies = swarm_factory(crazyflie_configs) #[cfg["type"](**cfg["kwargs"]) for cfg in crazyflie_configs]
@@ -237,7 +239,8 @@ async def main():
 
     # clients = [crazyflies[0], m5stampflies[0], crazyflies[1], betaflights[0]]
     # clients = [m5stampflies[0], simulator_clients[1], simulator_clients[2], simulator_clients[3]]
-    clients = [px4s[0], simulator_clients[1], simulator_clients[2], simulator_clients[3]]
+    # clients = [px4s[0], simulator_clients[1], simulator_clients[2], simulator_clients[3]]
+    clients = [simulator_clients[0], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
     
     behavior = Behavior(clients, lissajous_parameters=lissajous_parameters, spacing=spacing, height=0.5)
     async def loop():
