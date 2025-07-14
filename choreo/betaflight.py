@@ -84,32 +84,66 @@ class Betaflight(Drone):
     
     async def main(self):
         tick = 0
+        previous_deadman_trigger = None
+        landing_start = None
+        landing_position = None
+        def to_channel(value):
+            return np.clip(value, -1, 1) * (RC_CHANNEL_MAX - RC_CHANNEL_MIN) / 2 + (RC_CHANNEL_MAX + RC_CHANNEL_MIN) / 2
         while True:
             if self.orientation is None or self.position is None or self.velocity is None or self.target_position is None or self.target_velocity is None:
                 await asyncio.sleep(0.01)
-                continue
-            w_m, z_m = self.orientation[0], self.orientation[3]
-            if w_m < 0:
-                w_m = -w_m
-                z_m = -z_m
-            d_m = np.sqrt(w_m*w_m + z_m*z_m)
-            if d_m < 1e-6:
-                continue
-            angle_transmission = 2 * np.arctan2(z_m / d_m, w_m / d_m) / np.pi
+                output = [
+                    to_channel([0, 0, 1]), # AET
+                    to_channel([0]), # R
+                    to_channel([0]), # AUX1
+                    to_channel([0, 0, 0]) # AUX2-4
+                ]
+            else:
+                w_m, z_m = self.orientation[0], self.orientation[3]
+                if w_m < 0:
+                    w_m = -w_m
+                    z_m = -z_m
+                d_m = np.sqrt(w_m*w_m + z_m*z_m)
+                if d_m < 1e-6:
+                    continue
+                angle_transmission = 2 * np.arctan2(z_m / d_m, w_m / d_m) / np.pi
 
-            relative_position = np.array(self.position) - np.array(self.target_position)
-            relative_velocity = np.array(self.velocity) - np.array(self.target_velocity)
-            if tick % 100 == 0:
-                print(f"angle transmission: {angle_transmission:.2f}")
-                print(f"relative position: {relative_position[0]:.2f} {relative_position[1]:.2f} {relative_position[2]:.2f} velocity: {relative_velocity[0]:.2f} {relative_velocity[1]:.2f} {relative_velocity[2]:.2f}")
-            def to_channel(value):
-                return np.clip(value, -1, 1) * (RC_CHANNEL_MAX - RC_CHANNEL_MIN) / 2 + (RC_CHANNEL_MAX + RC_CHANNEL_MIN) / 2
-            output = [
-                to_channel(relative_position), # AET
-                to_channel([angle_transmission]), # R
-                to_channel([-1 if not deadman.trigger else 1]), # AUX1
-                to_channel(relative_velocity) # AUX2-4
-            ]
+                if previous_deadman_trigger is not None and previous_deadman_trigger != deadman.trigger:
+                    if not deadman.trigger and landing_start is None:
+                        print("Landing")
+                        landing_start = time.time()
+                        landing_position = self.position.copy()
+                        landing_position[2] = -0.2
+
+                if landing_start is not None:
+                    self.target_position = landing_position
+                    self.target_velocity = np.zeros(3)
+                    if time.time() - landing_start > 1:
+                        landing_start = None
+                        armed = False
+                    else:
+                        armed = True
+                else:
+                    armed = deadman.trigger
+                
+                previous_deadman_trigger = deadman.trigger
+
+
+
+                relative_position = np.array(self.position) - np.array(self.target_position)
+                relative_velocity = np.array(self.velocity) - np.array(self.target_velocity)
+                if tick % 100 == 0:
+                    print(f"angle transmission: {angle_transmission:.2f}")
+                    print(f"relative position: {relative_position[0]:.2f} {relative_position[1]:.2f} {relative_position[2]:.2f} velocity: {relative_velocity[0]:.2f} {relative_velocity[1]:.2f} {relative_velocity[2]:.2f}")
+
+
+
+                output = [
+                    to_channel(relative_position), # AET
+                    to_channel([angle_transmission]), # R
+                    to_channel([1 if armed else -1]), # AUX1
+                    to_channel(relative_velocity) # AUX2-4
+                ]
             self.elrs.set_channels(np.concatenate(output).astype(int).tolist())
             await asyncio.sleep(0.01)
             tick += 1
@@ -142,7 +176,7 @@ class Betaflight(Drone):
         pass
 
 async def main():
-    time.sleep(10)
+    # time.sleep(10)
     VICON_IP = "192.168.1.3"
     from mocap import Vicon
     target_position = [0, 0, 0.2]
@@ -174,7 +208,7 @@ async def main():
         while not deadman.trigger:
             await asyncio.sleep(0.1)
         betaflight._forward_command(target_position, [0, 0, 0])
-        await asyncio.sleep(5)
+        await asyncio.sleep(15)
         betaflight._forward_command(initial_position + np.array([0, 0, -0.2]), [0, 0, 0])
         await asyncio.sleep(5)
         while deadman.trigger:
