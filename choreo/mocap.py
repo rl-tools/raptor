@@ -8,16 +8,18 @@ import csv
 class Vicon:
     def __init__(self, VICON_TRACKER_IP, **kwargs):
         self.kwargs = kwargs
+        self.VICON_TRACKER_IP = VICON_TRACKER_IP
         self.tracker = ObjectTracker(VICON_TRACKER_IP)
         assert self.tracker.is_connected, "Tracker must be connected to Vicon system"
         self.tracker.vicon_client.get_frame()
         subject_count = self.tracker.vicon_client.get_subject_count()
         names = [self.tracker.vicon_client.get_subject_name(i) for i in range(subject_count)]
         print("Currently observed object names:", names)
+        self.tracker.vicon_client.disconnect()
         self.objects = []
     
     def add(self, object_name, callback):
-        self.objects.append(ViconObject(object_name, self.tracker, callback, **self.kwargs))
+        self.objects.append(ViconObject(object_name, ObjectTracker(self.VICON_TRACKER_IP), callback, **self.kwargs))
 
 
 class ViconObject:
@@ -54,35 +56,36 @@ class ViconObject:
                     if len(self.frames) == 0 or frame != self.frames[-1]:
                         now_ns = time.time_ns()
                         now = now_ns / 1e9
-                        self.frames.append(frame)
-                        self.frame_times.append(now)
-                        self.frames = self.frames[-self.NUM_FRAMES:]
-                        self.frame_times = self.frame_times[-self.NUM_FRAMES:]
                         data = list(filter(lambda x: x[0] == self.object_name, data))
-                        if len(data) > 0 and len(self.frame_times) > 1:
-                            _, _, x, y, z, euler_x, euler_y, euler_z = data[0]
-                            position = np.array([x, y, z]) / 1000
-                            r = R.from_euler('XYZ', [euler_x, euler_y, euler_z])
-                            orientation_xyzw = r.as_quat()  # Returns [x, y, z, w]
-                            orientation = [orientation_xyzw[3], orientation_xyzw[0], orientation_xyzw[1], orientation_xyzw[2]]
-                            # print(f"x: {position[0]:.2f}, y: {position[1]:.2f}, z: {position[2]:.2f}, roll: {euler_x:.2f}, pitch: {euler_y:.2f}, yaw: {euler_z:.2f}")
-                            if self.last_position is not None:
-                                frame_dt = now - self.last_position_time
-                                if frame_dt > 1.5/self.EXPECTED_FRAMERATE:
-                                    print(f"High frame latency: {frame_dt}")
-                                    self.reset_counter += 1
-                                velocity = (position - self.last_position) / frame_dt
-                                if self.VELOCITY_CLIP is not None:
-                                    velocity = np.clip(velocity, -self.VELOCITY_CLIP, self.VELOCITY_CLIP)
-                            else:
-                                frame_dt = 0 
-                                velocity = np.zeros(3)
-                            self.data_records.append((now, frame, frame_dt, position, euler_x, euler_y, euler_z, *orientation, velocity))
-                            writer.writerow([now, frame, frame_dt, *position, euler_x, euler_y, euler_z, *orientation, *velocity])
-                            self.data_records = self.data_records[-self.NUM_FRAMES_CSV:]
-                            self.last_position = position
-                            self.last_position_time = now
-                            self.callback(now_ns, position, orientation, velocity, self.reset_counter)
+                        if len(data) > 0:
+                            self.frames.append(frame)
+                            self.frame_times.append(now)
+                            self.frames = self.frames[-self.NUM_FRAMES:]
+                            self.frame_times = self.frame_times[-self.NUM_FRAMES:]
+                            if  len(self.frame_times) > 1:
+                                _, _, x, y, z, euler_x, euler_y, euler_z = data[0]
+                                position = np.array([x, y, z]) / 1000
+                                r = R.from_euler('XYZ', [euler_x, euler_y, euler_z])
+                                orientation_xyzw = r.as_quat()  # Returns [x, y, z, w]
+                                orientation = [orientation_xyzw[3], orientation_xyzw[0], orientation_xyzw[1], orientation_xyzw[2]]
+                                # print(f"x: {position[0]:.2f}, y: {position[1]:.2f}, z: {position[2]:.2f}, roll: {euler_x:.2f}, pitch: {euler_y:.2f}, yaw: {euler_z:.2f}")
+                                if self.last_position is not None:
+                                    frame_dt = now - self.last_position_time
+                                    if frame_dt > 1.5/self.EXPECTED_FRAMERATE:
+                                        print(f"High frame latency: {frame_dt}")
+                                        self.reset_counter += 1
+                                    velocity = (position - self.last_position) / frame_dt
+                                    if self.VELOCITY_CLIP is not None:
+                                        velocity = np.clip(velocity, -self.VELOCITY_CLIP, self.VELOCITY_CLIP)
+                                else:
+                                    frame_dt = 0 
+                                    velocity = np.zeros(3)
+                                self.data_records.append((now, frame, frame_dt, position, euler_x, euler_y, euler_z, *orientation, velocity))
+                                writer.writerow([now, frame, frame_dt, *position, euler_x, euler_y, euler_z, *orientation, *velocity])
+                                self.data_records = self.data_records[-self.NUM_FRAMES_CSV:]
+                                self.last_position = position
+                                self.last_position_time = now
+                                self.callback(now_ns, position, orientation, velocity, self.reset_counter)
                 if len(self.frames) > 1:
                     if(np.any(np.diff(self.frames) > 1)):
                         if np.argmax(np.diff(self.frames)) == len(self.frames) - 1:

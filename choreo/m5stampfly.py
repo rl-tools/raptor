@@ -184,7 +184,7 @@ async def main():
         while not deadman.trigger:
             await asyncio.sleep(0.1)
         fly._forward_command(target_position, [0, 0, 0])
-        await asyncio.sleep(15)
+        await asyncio.sleep(30)
         fly._forward_command(initial_position + np.array([0, 0, -0.2]), [0, 0, 0])
         await asyncio.sleep(5)
         while deadman.trigger:

@@ -172,8 +172,8 @@ async def main():
     USE_PX4 = False
     USE_CRAZYFLIES = True
     # USE_CRAZYFLIES = False
-    # USE_BETAFLIGHT = True
-    USE_BETAFLIGHT = False
+    USE_BETAFLIGHT = True
+    # USE_BETAFLIGHT = False
     USE_M5STAMPFLY = True
     # USE_M5STAMPFLY = False
     crazyflies = []
@@ -229,19 +229,10 @@ async def main():
     # clients = [*simulator_clients[:-len(clients)], *clients]
     # clients = simulator_clients
 
-    # clients = [simulator_clients[0], betaflights[0], simulator_clients[2], simulator_clients[3]]
+    clients = [crazyflies[0], m5stampflies[0], crazyflies[1], betaflights[0]]
     # clients = [m5stampflies[0], simulator_clients[1], simulator_clients[2], simulator_clients[3]]
-    # clients = [crazyflies[0], m5stampflies[0], crazyflies[1], betaflights[0]]
-    # clients = [m5stampflies[0], crazyflies[0], betaflights[0], simulator_clients[3]]
-    clients = [crazyflies[0], m5stampflies[0], crazyflies[1], simulator_clients[3]]
-    # clients = [m5stampflies[0], simulator_clients[1], simulator_clients[2], simulator_clients[3]]
-    # clients = [crazyflies[0], crazyflies[1], simulator_clients[2], simulator_clients[3]]
-    # clients = [simulator_clients[0], px4s[0], simulator_clients[2], simulator_clients[3]]
-    # clients = [simulator_clients[0], simulator_clients[1], crazyflies[0], simulator_clients[3]]
-    # clients = [simulator_clients[0], px4s[0], crazyflies[0], crazyflies[1]]
-    # clients = [simulator_clients[0], simulator_clients[1], simulator_clients[2], crazyflies[0]]
     
-    behavior = Behavior(clients, lissajous_parameters=lissajous_parameters, spacing=spacing, height=0.5)
+    behavior = Behavior(clients, lissajous_parameters=lissajous_parameters, spacing=spacing, height=0.3)
     async def loop():
         tick = 0
         dt = 0.01
@@ -266,5 +257,22 @@ async def main():
     await asyncio.sleep(1)
     await asyncio.gather(*tasks)
 
+class MocapDummy:
+    def __init__(self):
+        pass
+    def _mocap_callback(self, timestamp, position, orientation, velocity, reset_counter):
+        pass
+
+
+async def main_mocap_test():
+    mocap = Vicon(VICON_IP, VELOCITY_CLIP=5, EXPECTED_FRAMERATE=100)
+    for name in ["hummingbird", "m5stampfly", "crazyflie", "crazyflie_bl", "race_jonas"]:
+        mocap.add(name, MocapDummy()._mocap_callback)
+    while True:
+        await asyncio.sleep(1)
+
 if __name__ == "__main__":
     asyncio.run(main())
+    # asyncio.run(main_mocap_test())
+
+

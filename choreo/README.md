@@ -23,6 +23,7 @@ Using the `Jumper Aion ELRS 2.4G TX Nano`:
 - Disable Model Match (bind to normal transmitter with the ELRS Lua script, and disable Model match there).
 - Make sure the propeller directions (CW/CCW) are not inverted (front-left: CW, front-right: CCW, back-left: CCW, back-right: CW)
 - Use the LED colors if available to check if the Mocap feedback works. Set to mode Color and then modulate by e.g. "Roll" which is the x displacement in our Mocap over ELRS conventions
+- Disable Telemetry on the Drone to reduce RF load
 
 
 
