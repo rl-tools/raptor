@@ -125,7 +125,7 @@ class Betaflight(Drone):
             if self.position is not None:
                 target = target_input if relative else target_input
                 distance = np.linalg.norm(target - self.position)
-                print(f"Distance to target: {distance:.2f} m", file=mux[4])
+                # print(f"Distance to target: {distance:.2f} m", file=mux[4])
                 self._forward_command(target, [0, 0, 0])
             else:
                 print("Position not available yet")
@@ -142,15 +142,17 @@ class Betaflight(Drone):
         pass
 
 async def main():
+    time.sleep(10)
     VICON_IP = "192.168.1.3"
     from mocap import Vicon
     target_position = [0, 0, 0.2]
     betaflight = Betaflight(uri='/dev/serial/by-name/elrs-transmitter1', BAUD=921600, rate=50, odometry_source="mocap", verbose=True)
     betaflight._forward_command(target_position, [0, 0, 0])
-    asyncio.create_task(deadman.monitor(type="foot-pedal")),
-    asyncio.create_task(betaflight.main())
+    # asyncio.create_task(deadman.monitor(type="foot-pedal")),
+    asyncio.create_task(deadman.monitor(type="gamepad")),
+    betaflight_main_task = asyncio.create_task(betaflight.main())
     mocap = Vicon(VICON_TRACKER_IP=VICON_IP)
-    mocap.add("hummingbird", betaflight._mocap_callback)
+    mocap.add("savagebee_pusher", betaflight._mocap_callback)
     while betaflight.position is None:
         await asyncio.sleep(0.1)
     initial_position = betaflight.position.copy()
@@ -168,8 +170,16 @@ async def main():
             tick += 1
     asyncio.create_task(timer())
     while True:
-        await betaflight.goto(target_position, distance_threshold=0.1)
-        await asyncio.sleep(0.1)
+        while not deadman.trigger:
+            await asyncio.sleep(0.1)
+        betaflight._forward_command(target_position, [0, 0, 0])
+        await asyncio.sleep(5)
+        betaflight._forward_command(initial_position + np.array([0, 0, -0.2]), [0, 0, 0])
+        await asyncio.sleep(5)
+        while deadman.trigger:
+            await asyncio.sleep(0.1)
+    # await betaflight.goto(initial_position, distance_threshold=0.0)
+    await betaflight_main_task # DO NOT TERMINATE, IF TERMINATED, THE DRONE DOES NOT RECEIVE FEEDBACK AND LIKELY SHOOTS INTO THE SKY
 
 if __name__ == "__main__":
     asyncio.run(main())

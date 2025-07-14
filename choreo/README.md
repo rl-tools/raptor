@@ -4,6 +4,7 @@ sudo mkdir /dev/serial/by-name/
 sudo ln -s /dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_F4\:12\:FA\:DC\:98\:F8-if00 /dev/serial/by-name/m5stamp-forwarder
 sudo ln -s /dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_48\:CA\:43\:B6\:44\:48-if00 /dev/serial/by-name/m5stamp-uav
 sudo ln -s /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0 /dev/serial/by-name/elrs-transmitter1
+sudo ln -s /dev/serial/by-id/usb-1a86_USB_Single_Serial_5969026050-if00 /dev/serial/by-name/elrs-transmitter2
 ```
 
 
