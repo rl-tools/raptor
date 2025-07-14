@@ -81,26 +81,53 @@ class M5StampFly(Drone):
     
     async def main(self):
         tick = 0
+        previous_deadman_trigger = None
+        landing_start = None
+        landing_position = None
         while True:
             if self.orientation is None or self.position is None or self.velocity is None or self.target_position is None or self.target_velocity is None:
                 await asyncio.sleep(0.01)
-                continue
-            w_m, z_m = self.orientation[0], self.orientation[3]
-            if w_m < 0:
-                w_m = -w_m
-                z_m = -z_m
-            d_m = np.sqrt(w_m*w_m + z_m*z_m)
-            if d_m < 1e-6:
-                continue
-            angle_transmission = 2 * np.arctan2(z_m / d_m, w_m / d_m) / np.pi
+                relative_position = [0, 0, 1]
+                angle_transmission = 0
+                relative_velocity = [0, 0, 0]
+                armed = False
+            else:
+                w_m, z_m = self.orientation[0], self.orientation[3]
+                if w_m < 0:
+                    w_m = -w_m
+                    z_m = -z_m
+                d_m = np.sqrt(w_m*w_m + z_m*z_m)
+                if d_m < 1e-6:
+                    continue
+                angle_transmission = 2 * np.arctan2(z_m / d_m, w_m / d_m) / np.pi
 
-            relative_position = np.array(self.position) - np.array(self.target_position)
-            relative_velocity = np.array(self.velocity) - np.array(self.target_velocity)
-            if tick % 100 == 0:
-                # print(f"angle transmission: {angle_transmission:.2f}")
-                print(f"relative position: {relative_position[0]:.2f} {relative_position[1]:.2f} {relative_position[2]:.2f} velocity: {relative_velocity[0]:.2f} {relative_velocity[1]:.2f} {relative_velocity[2]:.2f}")
-                # print(f"orientation: {self.orientation[0]:.2f} {self.orientation[1]:.2f} {self.orientation[2]:.2f} {self.orientation[3]:.2f}")
-            data_to_send = f"{relative_position[0]:0.3f},{relative_position[1]:0.3f},{relative_position[2]:0.3f},{angle_transmission:0.3f},{relative_velocity[0]:0.3f},{relative_velocity[1]:0.3f},{relative_velocity[2]:0.3f},{int(deadman.trigger)}\n"
+                if previous_deadman_trigger is not None and previous_deadman_trigger != deadman.trigger:
+                    if not deadman.trigger and landing_start is None:
+                        print("Landing")
+                        landing_start = time.time()
+                        landing_position = self.position.copy()
+                        landing_position[2] = -0.2
+
+                if landing_start is not None:
+                    self.target_position = landing_position
+                    self.target_velocity = np.zeros(3)
+                    if time.time() - landing_start > 1:
+                        landing_start = None
+                        armed = False
+                    else:
+                        armed = True
+                else:
+                    armed = deadman.trigger
+                
+                previous_deadman_trigger = deadman.trigger
+
+                relative_position = np.array(self.position) - np.array(self.target_position)
+                relative_velocity = np.array(self.velocity) - np.array(self.target_velocity)
+                if tick % 100 == 0:
+                    # print(f"angle transmission: {angle_transmission:.2f}")
+                    print(f"relative position: {relative_position[0]:.2f} {relative_position[1]:.2f} {relative_position[2]:.2f} velocity: {relative_velocity[0]:.2f} {relative_velocity[1]:.2f} {relative_velocity[2]:.2f}")
+                    # print(f"orientation: {self.orientation[0]:.2f} {self.orientation[1]:.2f} {self.orientation[2]:.2f} {self.orientation[3]:.2f}")
+            data_to_send = f"{relative_position[0]:0.3f},{relative_position[1]:0.3f},{relative_position[2]:0.3f},{angle_transmission:0.3f},{relative_velocity[0]:0.3f},{relative_velocity[1]:0.3f},{relative_velocity[2]:0.3f},{int(armed)}\n"
             self.serial.write(data_to_send.encode())
             # if(self.serial.in_waiting > 0):
             #     print(self.serial.readline().decode())
@@ -137,23 +164,33 @@ class M5StampFly(Drone):
 async def main():
     VICON_IP = "192.168.1.3"
     from mocap import Vicon
-    target_position = [0, 0, 0.2]
-    betaflight = M5StampFly(rate=50, odometry_source="mocap", verbose=True)
-    betaflight._forward_command(target_position, [0, 0, 0])
-    asyncio.create_task(deadman.monitor()),
-    asyncio.create_task(betaflight.main())
     mocap = Vicon(VICON_TRACKER_IP=VICON_IP)
-    mocap.add("m5stampfly", betaflight._mocap_callback)
-    while betaflight.position is None:
+    target_position = [0, 0, 0.2]
+    fly = M5StampFly(uri='/dev/serial/by-name/m5stamp-forwarder', rate=50, odometry_source="mocap", verbose=True)
+    fly._forward_command(target_position, [0, 0, 0])
+    asyncio.create_task(deadman.monitor(type="foot-pedal")),
+    fly_main_task = asyncio.create_task(fly.main())
+    mocap.add("m5stampfly", fly._mocap_callback)
+    while fly.position is None:
         await asyncio.sleep(0.1)
-    initial_position = betaflight.position.copy()
+    initial_position = fly.position.copy()
     target_position = initial_position + np.array([0, 0, 0.2])
     print(f"Initial position: {initial_position}")
     print(f"Target position: {target_position}")
 
+
     while True:
-        await betaflight.goto(target_position, distance_threshold=0.1)
-        await asyncio.sleep(0.1)
+        fly._forward_command(target_position, [0, 0, 0])
+        while not deadman.trigger:
+            await asyncio.sleep(0.1)
+        fly._forward_command(target_position, [0, 0, 0])
+        await asyncio.sleep(15)
+        fly._forward_command(initial_position + np.array([0, 0, -0.2]), [0, 0, 0])
+        await asyncio.sleep(5)
+        while deadman.trigger:
+            await asyncio.sleep(0.1)
+    # await fly.goto(initial_position, distance_threshold=0.0)
+    await fly_main_task # DO NOT TERMINATE, IF TERMINATED, THE DRONE DOES NOT RECEIVE FEEDBACK AND LIKELY SHOOTS INTO THE SKY
 
 if __name__ == "__main__":
     asyncio.run(main())
