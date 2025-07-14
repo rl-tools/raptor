@@ -38,11 +38,18 @@ def send_learned_policy_packet(cf):
     pk.data = struct.pack('<B', 1)
     cf.send_packet(pk)
 
+
+crazyflie_registry = {
+    "crazyflie": "radio://0/80/2M/E7E7E7E7E7",
+    "crazyflie_bl": "radio://0/80/2M/E7E7E7E7E9",
+}
+
 class Crazyflie(Drone):
     def __init__(self, uri='radio://0/80/2M/E7E7E7E7E7', cf=None, odometry_source="mocap", **kwargs):
         super().__init__(**kwargs)
         # odometry_source: "mocap" or "log" (feedback from drone)
         if cf is None:
+            cflib.crtp.init_drivers()
             self.scf = SyncCrazyflie(uri, cf=CrazyflieCFLib())
             self.scf.open_link()
             self.cf = self.scf.cf
@@ -175,3 +182,46 @@ class Crazyflie(Drone):
         self.cf.commander.send_notify_setpoint_stop()
         print("disarming", file=mux[2])
         self.cf.platform.send_arming_request(False)
+
+async def main():
+    # Initialize CFLIB drivers for single Crazyflie connections
+    cflib.crtp.init_drivers()
+    
+    # time.sleep(10)
+    VICON_IP = "192.168.1.3"
+    from mocap import Vicon
+    target_position = [0, 0, 0.2]
+    mocap = Vicon(VICON_TRACKER_IP=VICON_IP)
+    instance = "crazyflie"
+    crazyflie = Crazyflie(uri=crazyflie_registry[instance], odometry_source="mocap")
+    crazyflie._forward_command(target_position, [0, 0, 0])
+    # asyncio.create_task(deadman.monitor(type="foot-pedal")),
+    asyncio.create_task(deadman.monitor(type="foot-pedal")),
+    crazyflie_main_task = asyncio.create_task(crazyflie.main())
+    mocap.add(instance, crazyflie._mocap_callback)
+    while crazyflie.position is None:
+        await asyncio.sleep(0.1)
+    initial_position = crazyflie.position.copy()
+    target_position = initial_position + np.array([0, 0, 0.2])
+    print(f"Initial position: {initial_position}")
+    print(f"Target position: {target_position}")
+
+    while True:
+        crazyflie._forward_command(target_position, [0, 0, 0])
+        while not deadman.trigger:
+            await asyncio.sleep(0.1)
+        crazyflie._forward_command(target_position, [0, 0, 0])
+        timeout = asyncio.create_task(asyncio.sleep(15))
+        while not timeout.done():
+            distance = crazyflie.position - target_position
+            print(f"Distance to target: {distance[0]:.2f} {distance[1]:.2f} {distance[2]:.2f} m")
+            await asyncio.sleep(0.1)
+        crazyflie._forward_command(initial_position + np.array([0, 0, -0.2]), [0, 0, 0])
+        await asyncio.sleep(5)
+        while deadman.trigger:
+            await asyncio.sleep(0.1)
+    # await betaflight.goto(initial_position, distance_threshold=0.0)
+    await crazyflie_main_task # DO NOT TERMINATE, IF TERMINATED, THE DRONE DOES NOT RECEIVE FEEDBACK AND LIKELY SHOOTS INTO THE SKY
+
+if __name__ == "__main__":
+    asyncio.run(main())

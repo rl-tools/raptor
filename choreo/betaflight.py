@@ -113,7 +113,7 @@ class Betaflight(Drone):
                         print("Landing")
                         landing_start = time.time()
                         landing_position = self.position.copy()
-                        landing_position[2] = -0.2
+                        landing_position[2] = 0
 
                 if landing_start is not None:
                     self.target_position = landing_position
@@ -181,16 +181,18 @@ async def main():
     from mocap import Vicon
     target_position = [0, 0, 0.2]
     mocap = Vicon(VICON_TRACKER_IP=VICON_IP)
-    betaflight = Betaflight(uri='/dev/serial/by-name/elrs-transmitter2', BAUD=921600, rate=50, odometry_source="mocap", verbose=True)
+    URI = '/dev/serial/by-name/elrs-transmitter1'
+    # URI = '/dev/serial/by-name/elrs-transmitter1'
+    betaflight = Betaflight(uri=URI, BAUD=921600, rate=50, odometry_source="mocap", verbose=True)
     betaflight._forward_command(target_position, [0, 0, 0])
     # asyncio.create_task(deadman.monitor(type="foot-pedal")),
     asyncio.create_task(deadman.monitor(type="foot-pedal")),
     betaflight_main_task = asyncio.create_task(betaflight.main())
-    mocap.add("hummingbird", betaflight._mocap_callback)
+    mocap.add("savagebee_pusher", betaflight._mocap_callback)
     while betaflight.position is None:
         await asyncio.sleep(0.1)
     initial_position = betaflight.position.copy()
-    target_position = initial_position + np.array([0, 0, 0.2])
+    target_position = initial_position + np.array([0, 0, 0.4])
     print(f"Initial position: {initial_position}")
     print(f"Target position: {target_position}")
 
@@ -208,8 +210,12 @@ async def main():
         while not deadman.trigger:
             await asyncio.sleep(0.1)
         betaflight._forward_command(target_position, [0, 0, 0])
-        await asyncio.sleep(15)
-        betaflight._forward_command(initial_position + np.array([0, 0, -0.2]), [0, 0, 0])
+        timeout = asyncio.create_task(asyncio.sleep(15))
+        while not timeout.done():
+            distance = betaflight.position - target_position
+            print(f"Distance to target: {distance[0]:.2f} {distance[1]:.2f} {distance[2]:.2f} m")
+            await asyncio.sleep(0.1)
+        betaflight._forward_command(initial_position + np.array([0, 0, 0]), [0, 0, 0])
         await asyncio.sleep(5)
         while deadman.trigger:
             await asyncio.sleep(0.1)

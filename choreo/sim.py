@@ -118,7 +118,7 @@ async def main():
         [-0.5, -1.5, 0],
         [-1.0, -1.5, 0]
     ])
-    spacing = np.array([2, 2, 2.5, 1])
+    spacing = np.array([2, 2, 2, 2])
     PLOT = False
     # PLOT = True
     if PLOT:
@@ -168,8 +168,8 @@ async def main():
             "mocap": "crazyflie",
         },
     ]
-    # USE_PX4 = True
-    USE_PX4 = False
+    USE_PX4 = True
+    # USE_PX4 = False
     USE_CRAZYFLIES = True
     # USE_CRAZYFLIES = False
     USE_BETAFLIGHT = True
@@ -204,6 +204,12 @@ async def main():
             "kwargs": {"uri": "/dev/serial/by-name/elrs-transmitter2", "BAUD": 921600, "rate": 50, "odometry_source": "mocap"},
             "mocap": "hummingbird",
         },
+        {
+            "name": "savagebee_pusher",
+            "type": Betaflight,
+            "kwargs": {"uri": "/dev/serial/by-name/elrs-transmitter1", "BAUD": 921600, "rate": 50, "odometry_source": "mocap"},
+            "mocap": "savagebee_pusher",
+        },
     ]
     betaflights = []
     if USE_BETAFLIGHT:
@@ -229,10 +235,11 @@ async def main():
     # clients = [*simulator_clients[:-len(clients)], *clients]
     # clients = simulator_clients
 
-    clients = [crazyflies[0], m5stampflies[0], crazyflies[1], betaflights[0]]
+    # clients = [crazyflies[0], m5stampflies[0], crazyflies[1], betaflights[0]]
     # clients = [m5stampflies[0], simulator_clients[1], simulator_clients[2], simulator_clients[3]]
+    clients = [px4s[0], simulator_clients[1], simulator_clients[2], simulator_clients[3]]
     
-    behavior = Behavior(clients, lissajous_parameters=lissajous_parameters, spacing=spacing, height=0.3)
+    behavior = Behavior(clients, lissajous_parameters=lissajous_parameters, spacing=spacing, height=0.5)
     async def loop():
         tick = 0
         dt = 0.01

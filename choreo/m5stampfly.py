@@ -174,7 +174,7 @@ async def main():
     while fly.position is None:
         await asyncio.sleep(0.1)
     initial_position = fly.position.copy()
-    target_position = initial_position + np.array([0, 0, 0.2])
+    target_position = initial_position + np.array([0, 0, 0.5])
     print(f"Initial position: {initial_position}")
     print(f"Target position: {target_position}")
 

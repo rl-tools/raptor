@@ -58,5 +58,13 @@
             "console": "integratedTerminal",
             "justMyCode": false
         },
+        {
+            "name": "crazyflie",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/choreo/crazyflie.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+        },
     ]
 }
