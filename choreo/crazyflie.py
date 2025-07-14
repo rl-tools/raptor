@@ -50,14 +50,14 @@ class Crazyflie(Drone):
             self.cf = cf
         self.odometry_source = odometry_source
         self.position = None
-        logconf = LogConfig(name="Choreo", period_in_ms=500)
-        logconf.add_variable('stateEstimate.x', 'float')
-        logconf.add_variable('stateEstimate.y', 'float')
-        logconf.add_variable('stateEstimate.z', 'float')
-        logconf.add_variable('stateEstimate.vx', 'float')
-        logconf.add_variable('stateEstimate.vy', 'float')
-        logconf.add_variable('stateEstimate.vz', 'float')
-        self.cf.log.add_config(logconf)
+        # logconf = LogConfig(name="Choreo", period_in_ms=500)
+        # logconf.add_variable('stateEstimate.x', 'float')
+        # logconf.add_variable('stateEstimate.y', 'float')
+        # logconf.add_variable('stateEstimate.z', 'float')
+        # logconf.add_variable('stateEstimate.vx', 'float')
+        # logconf.add_variable('stateEstimate.vy', 'float')
+        # logconf.add_variable('stateEstimate.vz', 'float')
+        # self.cf.log.add_config(logconf)
 
         self.position_number = 0
         self.safety_distance = 0.15
@@ -74,27 +74,25 @@ class Crazyflie(Drone):
             # self.position = np.array([x, y, z])
             # print(f"Position: {self.position}")
             # print(f"State: {sm}")
-        logconf.data_received_cb.add_callback(log_callback)
-        logconf.start()
-        console = Console(self.cf)
-        logfile = open("console.log", "a")
-        def console_callback(text):
-            logfile.write(text)
-            logfile.flush()
-        console.receivedChar.add_callback(console_callback)
-        self.learned_controller = False
+        # logconf.data_received_cb.add_callback(log_callback)
+        # logconf.start()
+        # console = Console(self.cf)
+        # logfile = open("console.log", "a")
+        # def console_callback(text):
+        #     logfile.write(text)
+        #     logfile.flush()
+        # console.receivedChar.add_callback(console_callback)
+        self.learned_controller = True
         loop = asyncio.get_event_loop()
         loop.create_task(self.main())
         self.disarmed = False
         self.last_pose_callback = None
         self.pose_callback_dts = []
         self.POSITION_ERROR_CLIP = 0.5
-    def _mocap_callback(self, msg):
-        pose = msg['pose']["pose"]
-        position = [pose['position']['x'], pose['position']['y'], pose['position']['z']]
-        self.orientation = [pose['orientation']['w'], pose['orientation']['x'], pose['orientation']['y'], pose['orientation']['z']]
+    def _mocap_callback(self, timestamp, position, orientation, velocity, reset_counter):
+        self.orientation = orientation
         if self.odometry_source == "mocap":
-            self._odometry_callback(position, self.velocity if self.velocity is not None else np.zeros(3))
+            self._odometry_callback(position, velocity)
         now = time.time()
         if self.last_pose_callback is not None and (now - self.last_pose_callback < 0.1):
             return
@@ -104,15 +102,6 @@ class Crazyflie(Drone):
             self.pose_callback_dts = self.pose_callback_dts[-100:]
         self.last_pose_callback = now
         # print(f"vicon pos: {position[0]:.2f} {position[1]:.2f} {position[2]:.2f} {1/np.mean(self.pose_callback_dts):.2f} Hz", file=mux[1])
-        self.cf.extpos.send_extpose(
-            pose['position']['x'],
-            pose['position']['y'],
-            pose['position']['z'],
-            pose['orientation']['x'],
-            pose['orientation']['y'],
-            pose['orientation']['z'],
-            pose['orientation']['w']
-        )
     
     async def arm(self):
         print("Requesting arming")
@@ -130,7 +119,17 @@ class Crazyflie(Drone):
                 self.cf.platform.send_arming_request(False)
             elif self.learned_controller:
                 send_learned_policy_packet(self.cf)
-            await asyncio.sleep(0.05)
+            if self.position is not None and self.orientation is not None:
+                self.cf.extpos.send_extpose(
+                    self.position[0],
+                    self.position[1],
+                    self.position[2],
+                    self.orientation[1],
+                    self.orientation[2],
+                    self.orientation[3],
+                    self.orientation[0]
+                )
+            await asyncio.sleep(0.1)
             # self.position = self.cf.position_estimator._position
             # print(f"Position: {self.position}")
     def _forward_command(self, position, velocity):

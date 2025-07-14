@@ -184,7 +184,7 @@ async def main():
     betaflight = Betaflight(uri='/dev/serial/by-name/elrs-transmitter2', BAUD=921600, rate=50, odometry_source="mocap", verbose=True)
     betaflight._forward_command(target_position, [0, 0, 0])
     # asyncio.create_task(deadman.monitor(type="foot-pedal")),
-    asyncio.create_task(deadman.monitor(type="gamepad")),
+    asyncio.create_task(deadman.monitor(type="foot-pedal")),
     betaflight_main_task = asyncio.create_task(betaflight.main())
     mocap.add("hummingbird", betaflight._mocap_callback)
     while betaflight.position is None:

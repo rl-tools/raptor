@@ -13,6 +13,7 @@ from trajectories.lissajous_uniform import lissajous_uniform, plot_lissajous
 from crazyflie import Crazyflie, swarm_factory
 from px4 import PX4
 from betaflight import Betaflight
+from m5stampfly import M5StampFly
 from mocap import Vicon
 import cflib
 import signal
@@ -106,7 +107,7 @@ class Behavior:
 VICON_IP = "192.168.1.3"
 async def main():
     cflib.crtp.init_drivers()
-    mocap = Vicon(VICON_IP, VELOCITY_CLIP=5)
+    mocap = Vicon(VICON_IP, VELOCITY_CLIP=5, EXPECTED_FRAMERATE=100)
     global simulator
     RANDOM_CLOSE_CALLS = False
     scale = 1.0
@@ -167,17 +168,19 @@ async def main():
             "mocap": "crazyflie",
         },
     ]
-    USE_PX4 = False
     # USE_PX4 = True
-    USE_CRAZYFLIES = False
-    # USE_CRAZYFLIES = True
-    # USE_BETAFLIGHT = False
-    USE_BETAFLIGHT = True
+    USE_PX4 = False
+    USE_CRAZYFLIES = True
+    # USE_CRAZYFLIES = False
+    # USE_BETAFLIGHT = True
+    USE_BETAFLIGHT = False
+    USE_M5STAMPFLY = True
+    # USE_M5STAMPFLY = False
     crazyflies = []
     if USE_CRAZYFLIES:
         crazyflies = swarm_factory(crazyflie_configs) #[cfg["type"](**cfg["kwargs"]) for cfg in crazyflie_configs]
         for cfg, crazyflie in zip(crazyflie_configs, crazyflies):
-            mocap.add(crazyflie, cfg["mocap"])
+            mocap.add(cfg["mocap"], crazyflie._mocap_callback)
             crazyflie.learned_controller = True
     px4_configs = [
         {
@@ -198,7 +201,7 @@ async def main():
         {
             "name": "hummingbird",
             "type": Betaflight,
-            "kwargs": {"uri": "/dev/ttyUSB0", "BAUD": 921600, "rate": 50, "odometry_source": "mocap"},
+            "kwargs": {"uri": "/dev/serial/by-name/elrs-transmitter2", "BAUD": 921600, "rate": 50, "odometry_source": "mocap"},
             "mocap": "hummingbird",
         },
     ]
@@ -208,17 +211,37 @@ async def main():
         for cfg, betaflight in zip(betaflight_configs, betaflights):
             mocap.add(cfg["mocap"], betaflight._mocap_callback)
 
+    m5stampfly_configs = [
+        {
+            "name": "m5stampfly",
+            "type": Betaflight,
+            "kwargs": {"uri": "/dev/serial/by-name/m5stamp-forwarder", "BAUD": 115200, "rate": 50, "odometry_source": "mocap"},
+            "mocap": "m5stampfly",
+        },
+    ]
+    m5stampflies = []
+    if USE_M5STAMPFLY:
+        m5stampflies = [M5StampFly(**cfg["kwargs"]) for cfg in m5stampfly_configs]
+        for cfg, m5stampfly in zip(m5stampfly_configs, m5stampflies):
+            mocap.add(cfg["mocap"], m5stampfly._mocap_callback)
+
     # clients = [*px4s, *crazyflies]
     # clients = [*simulator_clients[:-len(clients)], *clients]
     # clients = simulator_clients
 
-    clients = [simulator_clients[0], betaflights[0], simulator_clients[2], simulator_clients[3]]
+    # clients = [simulator_clients[0], betaflights[0], simulator_clients[2], simulator_clients[3]]
+    # clients = [m5stampflies[0], simulator_clients[1], simulator_clients[2], simulator_clients[3]]
+    # clients = [crazyflies[0], m5stampflies[0], crazyflies[1], betaflights[0]]
+    # clients = [m5stampflies[0], crazyflies[0], betaflights[0], simulator_clients[3]]
+    clients = [crazyflies[0], m5stampflies[0], crazyflies[1], simulator_clients[3]]
+    # clients = [m5stampflies[0], simulator_clients[1], simulator_clients[2], simulator_clients[3]]
+    # clients = [crazyflies[0], crazyflies[1], simulator_clients[2], simulator_clients[3]]
     # clients = [simulator_clients[0], px4s[0], simulator_clients[2], simulator_clients[3]]
     # clients = [simulator_clients[0], simulator_clients[1], crazyflies[0], simulator_clients[3]]
     # clients = [simulator_clients[0], px4s[0], crazyflies[0], crazyflies[1]]
     # clients = [simulator_clients[0], simulator_clients[1], simulator_clients[2], crazyflies[0]]
     
-    behavior = Behavior(clients, lissajous_parameters=lissajous_parameters, spacing=spacing, height=0.3)
+    behavior = Behavior(clients, lissajous_parameters=lissajous_parameters, spacing=spacing, height=0.5)
     async def loop():
         tick = 0
         dt = 0.01
@@ -234,7 +257,7 @@ async def main():
             await asyncio.sleep(dt)
             tick += 1
     tasks = [
-        asyncio.create_task(deadman.monitor()),
+        asyncio.create_task(deadman.monitor(type="foot-pedal")),
         asyncio.create_task(behavior.run()),
         asyncio.create_task(simulator.run()),
         *[asyncio.create_task(c.run()) for c in clients],
