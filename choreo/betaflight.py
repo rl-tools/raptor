@@ -146,13 +146,13 @@ async def main():
     VICON_IP = "192.168.1.3"
     from mocap import Vicon
     target_position = [0, 0, 0.2]
-    betaflight = Betaflight(uri='/dev/serial/by-name/elrs-transmitter1', BAUD=921600, rate=50, odometry_source="mocap", verbose=True)
+    mocap = Vicon(VICON_TRACKER_IP=VICON_IP)
+    betaflight = Betaflight(uri='/dev/serial/by-name/elrs-transmitter2', BAUD=921600, rate=50, odometry_source="mocap", verbose=True)
     betaflight._forward_command(target_position, [0, 0, 0])
     # asyncio.create_task(deadman.monitor(type="foot-pedal")),
     asyncio.create_task(deadman.monitor(type="gamepad")),
     betaflight_main_task = asyncio.create_task(betaflight.main())
-    mocap = Vicon(VICON_TRACKER_IP=VICON_IP)
-    mocap.add("savagebee_pusher", betaflight._mocap_callback)
+    mocap.add("hummingbird", betaflight._mocap_callback)
     while betaflight.position is None:
         await asyncio.sleep(0.1)
     initial_position = betaflight.position.copy()
@@ -170,6 +170,7 @@ async def main():
             tick += 1
     asyncio.create_task(timer())
     while True:
+        betaflight._forward_command(target_position, [0, 0, 0])
         while not deadman.trigger:
             await asyncio.sleep(0.1)
         betaflight._forward_command(target_position, [0, 0, 0])
