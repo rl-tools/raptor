@@ -118,9 +118,8 @@ async def main():
         [-0.5, -1.5, 0],
         [-1.0, -1.5, 0],
         [-1.5, -1.5, 0],
-        [-2.0, -1.5, 0],
     ])
-    spacing = np.array([2, 2, 1.5, 1, 1, 1])
+    spacing = np.array([2, 2, 1.5, 0.75, 1.25])
     PLOT = False
     # PLOT = True
     if PLOT:
@@ -170,12 +169,12 @@ async def main():
             "mocap": "crazyflie",
         },
     ]
-    # USE_PX4 = True
-    USE_PX4 = False
-    # USE_CRAZYFLIES = True
-    USE_CRAZYFLIES = False
-    # USE_BETAFLIGHT = True
-    USE_BETAFLIGHT = False
+    USE_PX4 = True
+    # USE_PX4 = False
+    USE_CRAZYFLIES = True
+    # USE_CRAZYFLIES = False
+    USE_BETAFLIGHT = True
+    # USE_BETAFLIGHT = False
     # USE_M5STAMPFLY = True
     USE_M5STAMPFLY = False
     crazyflies = []
@@ -240,7 +239,9 @@ async def main():
     # clients = [crazyflies[0], m5stampflies[0], crazyflies[1], betaflights[0]]
     # clients = [m5stampflies[0], simulator_clients[1], simulator_clients[2], simulator_clients[3]]
     # clients = [px4s[0], simulator_clients[1], simulator_clients[2], simulator_clients[3]]
-    clients = [simulator_clients[0], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
+    # clients = [simulator_clients[0], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
+    # clients = [px4s[0], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
+    clients = [px4s[0], betaflights[1], crazyflies[0], crazyflies[1], betaflights[0]]
     
     behavior = Behavior(clients, lissajous_parameters=lissajous_parameters, spacing=spacing, height=0.5)
     async def loop():

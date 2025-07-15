@@ -192,7 +192,7 @@ async def main():
     from mocap import Vicon
     target_position = [0, 0, 0.2]
     mocap = Vicon(VICON_TRACKER_IP=VICON_IP)
-    instance = "crazyflie"
+    instance = "crazyflie_bl"
     crazyflie = Crazyflie(uri=crazyflie_registry[instance], odometry_source="mocap")
     crazyflie._forward_command(target_position, [0, 0, 0])
     # asyncio.create_task(deadman.monitor(type="foot-pedal")),
