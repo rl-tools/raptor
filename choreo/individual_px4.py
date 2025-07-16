@@ -20,7 +20,7 @@ async def main():
         "name": "race",
         "type": PX4,
         # "kwargs": {"uri": "tcp:192.168.8.4:5760"},
-        "kwargs": {"uri": "tcp:192.168.1.6:5760"},
+        "kwargs": {"uri": "tcp:192.168.1.2:5760"},
         # "kwargs": {"uri": "udp:192.168.8.4:14550"},
         # "kwargs": {"uri": "/dev/ttyACM0"},
         "mocap": "race_jonas",

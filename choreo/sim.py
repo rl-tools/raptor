@@ -64,7 +64,8 @@ class Behavior:
             self.target_positions[in_trajectory:] = self.initial_target_positions[:-in_trajectory] if in_trajectory > 0 else self.initial_target_positions
             for i, client in enumerate(self.clients):
                 if t > cumsum_spacing[i]:
-                    self.target_positions[i], self.target_velocities[i] = lissajous_uniform(t - cumsum_spacing[i], **self.lissajous_parameters, z=self.height)
+                    offset = 0.5
+                    self.target_positions[i], self.target_velocities[i] = lissajous_uniform(t - cumsum_spacing[i] + offset, **self.lissajous_parameters, z=self.height)
             self.send_commands()
             await asyncio.sleep(dt)
             tick += 1
@@ -119,7 +120,6 @@ async def main():
         [-1.0, -1.5, 0],
         [-1.5, -1.5, 0],
     ])
-    spacing = np.array([2, 2, 1.5, 0.75, 1.25])
     PLOT = False
     # PLOT = True
     if PLOT:
@@ -177,17 +177,19 @@ async def main():
     # USE_BETAFLIGHT = False
     # USE_M5STAMPFLY = True
     USE_M5STAMPFLY = False
-    crazyflies = []
+    drones = {}
     if USE_CRAZYFLIES:
         crazyflies = swarm_factory(crazyflie_configs) #[cfg["type"](**cfg["kwargs"]) for cfg in crazyflie_configs]
         for cfg, crazyflie in zip(crazyflie_configs, crazyflies):
             mocap.add(cfg["mocap"], crazyflie._mocap_callback)
             crazyflie.learned_controller = True
+            drones[cfg["mocap"]] = crazyflie
+        
     px4_configs = [
         {
             "name": "race",
             "type": PX4,
-            "kwargs": {"uri": "tcp:192.168.1.6:5760"},
+            "kwargs": {"uri": "tcp:192.168.1.2:5760"},
             "mocap": "race_jonas",
         },
     ]
@@ -197,6 +199,7 @@ async def main():
             px4 = PX4(name=cfg["name"], **cfg["kwargs"])
             px4s.append(px4)
             mocap.add(cfg["mocap"], px4._mocap_callback)
+            drones[cfg["mocap"]] = px4
     
     betaflight_configs = [
         {
@@ -217,6 +220,7 @@ async def main():
         betaflights = [Betaflight(**cfg["kwargs"]) for cfg in betaflight_configs]
         for cfg, betaflight in zip(betaflight_configs, betaflights):
             mocap.add(cfg["mocap"], betaflight._mocap_callback)
+            drones[cfg["mocap"]] = betaflight
 
     m5stampfly_configs = [
         {
@@ -231,6 +235,7 @@ async def main():
         m5stampflies = [M5StampFly(**cfg["kwargs"]) for cfg in m5stampfly_configs]
         for cfg, m5stampfly in zip(m5stampfly_configs, m5stampflies):
             mocap.add(cfg["mocap"], m5stampfly._mocap_callback)
+            drones[cfg["mocap"]] = m5stampfly
 
     # clients = [*px4s, *crazyflies]
     # clients = [*simulator_clients[:-len(clients)], *clients]
@@ -241,7 +246,11 @@ async def main():
     # clients = [px4s[0], simulator_clients[1], simulator_clients[2], simulator_clients[3]]
     # clients = [simulator_clients[0], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
     # clients = [px4s[0], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
-    clients = [px4s[0], betaflights[1], crazyflies[0], crazyflies[1], betaflights[0]]
+    # clients = [drones["crazyflie_bl"], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
+    clients = [drones["race_jonas"], drones["savagebee_pusher"], drones["crazyflie_bl"], drones["crazyflie"], drones["hummingbird"]]
+    spacing = np.array([2, 2, 1.5, 0.75, 1.25])
+
+    assert len(clients) == len(spacing), f"Number of clients ({len(clients)}) and spacing ({len(spacing)}) must match"
     
     behavior = Behavior(clients, lissajous_parameters=lissajous_parameters, spacing=spacing, height=0.5)
     async def loop():
