@@ -133,8 +133,9 @@ class Betaflight(Drone):
                 relative_position = np.array(self.position) - np.array(self.target_position)
                 relative_velocity = np.array(self.velocity) - np.array(self.target_velocity)
                 if tick % 100 == 0:
-                    print(f"angle transmission: {angle_transmission:.2f}")
-                    print(f"relative position: {relative_position[0]:.2f} {relative_position[1]:.2f} {relative_position[2]:.2f} velocity: {relative_velocity[0]:.2f} {relative_velocity[1]:.2f} {relative_velocity[2]:.2f}")
+                    pass
+                    # print(f"angle transmission: {angle_transmission:.2f}")
+                    # print(f"relative position: {relative_position[0]:.2f} {relative_position[1]:.2f} {relative_position[2]:.2f} velocity: {relative_velocity[0]:.2f} {relative_velocity[1]:.2f} {relative_velocity[2]:.2f}")
 
 
 

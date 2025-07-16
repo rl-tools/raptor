@@ -154,7 +154,7 @@ class Crazyflie(Drone):
                 diff = position - self.position
                 diff = np.clip(diff, -self.POSITION_ERROR_CLIP, self.POSITION_ERROR_CLIP)
                 position = self.position + diff
-            print(f"cmd {'  '.join([f'{float(p):.2}' for p in position])}", file=mux[3])
+            # print(f"cmd {'  '.join([f'{float(p):.2}' for p in position])}", file=mux[3])
             self.cf.commander.send_full_state_setpoint(position, velocity, linear_acceleration, orientation, *angular_velocity)
 
     async def goto(self, target_input, distance_threshold=0.15, timeout=None, relative=True):

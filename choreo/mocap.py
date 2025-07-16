@@ -72,7 +72,7 @@ class ViconObject:
                                 if self.last_position is not None:
                                     frame_dt = now - self.last_position_time
                                     if frame_dt > 1.5/self.EXPECTED_FRAMERATE:
-                                        print(f"High frame latency: {frame_dt}")
+                                        # print(f"High frame latency: {frame_dt}")
                                         self.reset_counter += 1
                                     velocity = (position - self.last_position) / frame_dt
                                     if self.VELOCITY_CLIP is not None:

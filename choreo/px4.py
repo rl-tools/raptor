@@ -66,26 +66,30 @@ class PX4(Drone):
         vel_cov[0]  = vel_cov[6]  = vel_cov[11]  = self.VELOCITY_STD**2
         now = time.time()
         if self.last_mocap_callback is None or self.MOCAP_INTERVAL is None or now - self.last_mocap_callback > self.MOCAP_INTERVAL:
-            self.connection.mav.odometry_send(
-                usec,
-                mavutil.mavlink.MAV_FRAME_LOCAL_NED,    # pose frame
-                mavutil.mavlink.MAV_FRAME_LOCAL_NED,     # twist frame
-                x, y, z,
-                q_mav,
-                # vx_body, vy_body, vz_body,
-                vx, vy, vz,
-                float('nan'), float('nan'), float('nan'),   # angular rates
-                pose_cov,
-                vel_cov,
-                reset_counter,
-                mavutil.mavlink.MAV_ESTIMATOR_TYPE_VISION,
-                100 # quality (100% confidence, 0-100)
-            )
-            if self.last_mocap_callback is not None:
-                dt = now - self.last_mocap_callback
-                self.mocap_callback_dts.append(dt)
-                self.mocap_callback_dts = self.mocap_callback_dts[-100:]
-            self.last_mocap_callback = now
+            try:
+                self.connection.mav.odometry_send(
+                    usec,
+                    mavutil.mavlink.MAV_FRAME_LOCAL_NED,    # pose frame
+                    mavutil.mavlink.MAV_FRAME_LOCAL_NED,     # twist frame
+                    x, y, z,
+                    q_mav,
+                    # vx_body, vy_body, vz_body,
+                    vx, vy, vz,
+                    float('nan'), float('nan'), float('nan'),   # angular rates
+                    pose_cov,
+                    vel_cov,
+                    reset_counter % 255,
+                    mavutil.mavlink.MAV_ESTIMATOR_TYPE_VISION,
+                    100 # quality (100% confidence, 0-100)
+                )
+                if self.last_mocap_callback is not None:
+                    dt = now - self.last_mocap_callback
+                    self.mocap_callback_dts.append(dt)
+                    self.mocap_callback_dts = self.mocap_callback_dts[-100:]
+                self.last_mocap_callback = now
+            except Exception as e:
+                print(f"Error sending odometry: {e}")
+                print(f"Sending: {x} {y} {z} {q_mav} {vx} {vy} {vz} pose covariance {pose_cov} vel covariance {vel_cov} reset counter {reset_counter}")
             # print(f"Forwarding position (FRD) to MAVLink: {x:.2f}, {y:.2f}, {z:.2f}, q: {qw:.2f}, {qx:.2f}, {qy:.2f}, {qz:.2f} {1/np.mean(self.mocap_callback_dts):.2f} Hz")
     
     async def arm(self):
