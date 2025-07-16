@@ -175,8 +175,8 @@ async def main():
     # USE_CRAZYFLIES = False
     USE_BETAFLIGHT = True
     # USE_BETAFLIGHT = False
-    USE_M5STAMPFLY = True
-    # USE_M5STAMPFLY = False
+    # USE_M5STAMPFLY = True
+    USE_M5STAMPFLY = False
     drones = {}
     if USE_CRAZYFLIES:
         crazyflies = swarm_factory(crazyflie_configs) #[cfg["type"](**cfg["kwargs"]) for cfg in crazyflie_configs]
@@ -247,8 +247,8 @@ async def main():
     # clients = [simulator_clients[0], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
     # clients = [px4s[0], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
     # clients = [drones["crazyflie_bl"], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
-    clients = [drones["race_jonas"], drones["savagebee_pusher"], drones["crazyflie_bl"], drones["m5stampfly"], drones["crazyflie"], drones["hummingbird"]]
-    spacing = np.array([2, 1.5, 1.0, 1.0, 0.75, 1.25])
+    clients = [drones["race_jonas"], drones["savagebee_pusher"], drones["crazyflie_bl"], drones["crazyflie"], drones["hummingbird"]]
+    spacing = np.array([2, 1.5, 1.0, 0.75, 1.25])
 
     assert len(clients) == len(spacing), f"Number of clients ({len(clients)}) and spacing ({len(spacing)}) must match"
     
