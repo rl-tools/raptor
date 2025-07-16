@@ -123,7 +123,7 @@ class Crazyflie(Drone):
     async def main(self):
         while True:
             if not deadman.trigger:
-                print("disarming", file=mux[3])
+                # print("disarming", file=mux[3])
                 self.cf.platform.send_arming_request(False)
                 self.armed = False
             else:
