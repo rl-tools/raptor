@@ -114,9 +114,9 @@ class Crazyflie(Drone):
     async def arm(self):
         print("Requesting arming")
         # await asyncio.sleep(0.5)
-        # self.cf.platform.send_crash_recovery_request()
+        self.cf.platform.send_crash_recovery_request()
         # await asyncio.sleep(0.5)
-        # print("arming")
+        print("arming")
         self.cf.platform.send_arming_request(True)
         # await asyncio.sleep(0.5)
     
@@ -210,7 +210,7 @@ async def main():
     while crazyflie.position is None:
         await asyncio.sleep(0.1)
     initial_position = crazyflie.position.copy()
-    target_position = initial_position + np.array([0, 0, 0.4])
+    target_position = initial_position + np.array([0, 0, 0.2])
     print(f"Initial position: {initial_position}")
     print(f"Target position: {target_position}")
 
