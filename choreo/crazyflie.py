@@ -96,6 +96,7 @@ class Crazyflie(Drone):
         self.last_pose_callback = None
         self.pose_callback_dts = []
         self.POSITION_ERROR_CLIP = 0.5
+        self.armed = False
     def _mocap_callback(self, timestamp, position, orientation, velocity, reset_counter):
         self.orientation = orientation
         if self.odometry_source == "mocap":
@@ -112,20 +113,23 @@ class Crazyflie(Drone):
     
     async def arm(self):
         print("Requesting arming")
-        await asyncio.sleep(1.0)
-        self.cf.platform.send_crash_recovery_request()
-        await asyncio.sleep(1.0)
-        print("arming", file=mux[2])
+        # await asyncio.sleep(0.5)
+        # self.cf.platform.send_crash_recovery_request()
+        # await asyncio.sleep(0.5)
+        # print("arming")
         self.cf.platform.send_arming_request(True)
-        await asyncio.sleep(1.0)
+        # await asyncio.sleep(0.5)
     
     async def main(self):
         while True:
             if not deadman.trigger:
-                # print("disarming", file=mux[3])
+                print("disarming", file=mux[3])
                 self.cf.platform.send_arming_request(False)
-            elif self.learned_controller:
-                send_learned_policy_packet(self.cf)
+                self.armed = False
+            else:
+                if not self.armed:
+                    await self.arm()
+                    self.armed = True
             if self.position is not None and self.orientation is not None:
                 self.cf.extpos.send_extpose(
                     self.position[0],
@@ -136,6 +140,9 @@ class Crazyflie(Drone):
                     self.orientation[3],
                     self.orientation[0]
                 )
+            if self.armed and self.learned_controller:
+                # pass
+                send_learned_policy_packet(self.cf)
             await asyncio.sleep(0.1)
             # self.position = self.cf.position_estimator._position
             # print(f"Position: {self.position}")
@@ -164,6 +171,7 @@ class Crazyflie(Drone):
                 linear_velocity = np.zeros(3)
                 angular_velocity = np.zeros(3)
                 linear_acceleration = np.zeros(3)
+                print(f"cmd {'  '.join([f'{float(p):.2}' for p in position])}", file=mux[3])
                 self.cf.commander.send_full_state_setpoint(position, linear_velocity, linear_acceleration, orientation, *angular_velocity)
             else:
                 print("Position not available yet")
@@ -202,7 +210,7 @@ async def main():
     while crazyflie.position is None:
         await asyncio.sleep(0.1)
     initial_position = crazyflie.position.copy()
-    target_position = initial_position + np.array([0, 0, 0.2])
+    target_position = initial_position + np.array([0, 0, 0.4])
     print(f"Initial position: {initial_position}")
     print(f"Target position: {target_position}")
 
@@ -210,6 +218,7 @@ async def main():
         crazyflie._forward_command(target_position, [0, 0, 0])
         while not deadman.trigger:
             await asyncio.sleep(0.1)
+        await asyncio.sleep(1)
         crazyflie._forward_command(target_position, [0, 0, 0])
         timeout = asyncio.create_task(asyncio.sleep(15))
         while not timeout.done():

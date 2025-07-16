@@ -112,7 +112,7 @@ async def main():
     global simulator
     RANDOM_CLOSE_CALLS = False
     scale = 1.5
-    lissajous_parameters = dict(A=1.5*scale, B=0.5*scale, duration=20)
+    lissajous_parameters = dict(A=1.5*scale, B=0.5*scale, duration=15)
     initial_positions = np.array([
         [0, 0., 0],
         [0, -1.25, 0],
