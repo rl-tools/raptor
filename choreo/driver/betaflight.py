@@ -2,7 +2,9 @@ import struct
 import asyncio
 import time
 import numpy as np
-import serial
+from elrs import ELRS
+from elrs.elrs import RC_CHANNEL_MIN, RC_CHANNEL_MAX
+
 
 import deadman
 from mux import mux
@@ -35,8 +37,8 @@ from drone import Drone
 #     asyncio.run(main())
 
 
-class M5StampFly(Drone):
-    def __init__(self, uri='/dev/serial/by-name/m5stamp-forwarder', BAUD=115200, rate=50, odometry_source="mocap", verbose=False,**kwargs):
+class Betaflight(Drone):
+    def __init__(self, uri='/dev/ttyUSB0', BAUD=921600, rate=50, odometry_source="mocap", verbose=False,**kwargs):
         super().__init__(**kwargs)
         self.odometry_source = odometry_source
         self.orientation = None
@@ -44,7 +46,8 @@ class M5StampFly(Drone):
         self.velocity = None
         self.target_position = None
         self.target_velocity = None
-        self.serial = serial.Serial(uri, BAUD, timeout=1)
+        self.elrs = ELRS(uri, baud=BAUD, rate=rate, telemetry_callback=self._telemetry_callback, verbose=verbose)
+        asyncio.create_task(self.elrs.start())
 
 
         self.position_number = 0
@@ -84,13 +87,17 @@ class M5StampFly(Drone):
         previous_deadman_trigger = None
         landing_start = None
         landing_position = None
+        def to_channel(value):
+            return np.clip(value, -1, 1) * (RC_CHANNEL_MAX - RC_CHANNEL_MIN) / 2 + (RC_CHANNEL_MAX + RC_CHANNEL_MIN) / 2
         while True:
             if self.orientation is None or self.position is None or self.velocity is None or self.target_position is None or self.target_velocity is None:
                 await asyncio.sleep(0.01)
-                relative_position = [0, 0, 1]
-                angle_transmission = 0
-                relative_velocity = [0, 0, 0]
-                armed = False
+                output = [
+                    to_channel([0, 0, 1]), # AET
+                    to_channel([0]), # R
+                    to_channel([0]), # AUX1
+                    to_channel([0, 0, 0]) # AUX2-4
+                ]
             else:
                 w_m, z_m = self.orientation[0], self.orientation[3]
                 if w_m < 0:
@@ -106,7 +113,7 @@ class M5StampFly(Drone):
                         print("Landing")
                         landing_start = time.time()
                         landing_position = self.position.copy()
-                        landing_position[2] = -0.2
+                        landing_position[2] = 0
 
                 if landing_start is not None:
                     self.target_position = landing_position
@@ -121,16 +128,24 @@ class M5StampFly(Drone):
                 
                 previous_deadman_trigger = deadman.trigger
 
+
+
                 relative_position = np.array(self.position) - np.array(self.target_position)
                 relative_velocity = np.array(self.velocity) - np.array(self.target_velocity)
                 if tick % 100 == 0:
+                    pass
                     # print(f"angle transmission: {angle_transmission:.2f}")
-                    print(f"relative position: {relative_position[0]:.2f} {relative_position[1]:.2f} {relative_position[2]:.2f} velocity: {relative_velocity[0]:.2f} {relative_velocity[1]:.2f} {relative_velocity[2]:.2f}")
-                    # print(f"orientation: {self.orientation[0]:.2f} {self.orientation[1]:.2f} {self.orientation[2]:.2f} {self.orientation[3]:.2f}")
-            data_to_send = f"{relative_position[0]:0.3f},{relative_position[1]:0.3f},{relative_position[2]:0.3f},{angle_transmission:0.3f},{relative_velocity[0]:0.3f},{relative_velocity[1]:0.3f},{relative_velocity[2]:0.3f},{int(armed)}\n"
-            self.serial.write(data_to_send.encode())
-            # if(self.serial.in_waiting > 0):
-            #     print(self.serial.readline().decode())
+                    # print(f"relative position: {relative_position[0]:.2f} {relative_position[1]:.2f} {relative_position[2]:.2f} velocity: {relative_velocity[0]:.2f} {relative_velocity[1]:.2f} {relative_velocity[2]:.2f}")
+
+
+
+                output = [
+                    to_channel(relative_position), # AET
+                    to_channel([angle_transmission]), # R
+                    to_channel([1 if armed else -1]), # AUX1
+                    to_channel(relative_velocity) # AUX2-4
+                ]
+            self.elrs.set_channels(np.concatenate(output).astype(int).tolist())
             await asyncio.sleep(0.01)
             tick += 1
     def _forward_command(self, position, velocity):
@@ -138,7 +153,7 @@ class M5StampFly(Drone):
             self.target_velocity = velocity
 
     async def goto(self, target_input, distance_threshold=0.15, timeout=None, relative=True):
-        # print(f"Going to {target_input}")
+        print(f"Going to {target_input}")
         distance = None
         start = time.time()
         while distance is None or distance > distance_threshold or (timeout is not None and time.time() - start < timeout) and not self.disarmed:
@@ -146,7 +161,7 @@ class M5StampFly(Drone):
                 target = target_input if relative else target_input
                 distance = np.linalg.norm(target - self.position)
                 # print(f"Distance to target: {distance:.2f} m", file=mux[4])
-                self._forward_command(target, [0, 0, 0])
+                self.command(target, [0, 0, 0])
             else:
                 print("Position not available yet")
             await asyncio.sleep(0.1)
@@ -162,35 +177,51 @@ class M5StampFly(Drone):
         pass
 
 async def main():
+    # time.sleep(10)
     VICON_IP = "192.168.1.3"
     from mocap import Vicon
-    mocap = Vicon(VICON_TRACKER_IP=VICON_IP)
     target_position = [0, 0, 0.2]
-    fly = M5StampFly(uri='/dev/serial/by-name/m5stamp-forwarder', rate=50, odometry_source="mocap", verbose=True)
-    fly._forward_command(target_position, [0, 0, 0])
+    mocap = Vicon(VICON_TRACKER_IP=VICON_IP)
+    URI = '/dev/serial/by-name/elrs-transmitter1'
+    # URI = '/dev/serial/by-name/elrs-transmitter1'
+    betaflight = Betaflight(uri=URI, BAUD=921600, rate=50, odometry_source="mocap", verbose=True)
+    betaflight.command(target_position, [0, 0, 0])
+    # asyncio.create_task(deadman.monitor(type="foot-pedal")),
     asyncio.create_task(deadman.monitor(type="foot-pedal")),
-    fly_main_task = asyncio.create_task(fly.main())
-    mocap.add("m5stampfly", fly._mocap_callback)
-    while fly.position is None:
+    betaflight_main_task = asyncio.create_task(betaflight.main())
+    mocap.add("savagebee_pusher", betaflight._mocap_callback)
+    while betaflight.position is None:
         await asyncio.sleep(0.1)
-    initial_position = fly.position.copy()
-    target_position = initial_position + np.array([0, 0, 0.5])
+    initial_position = betaflight.position.copy()
+    target_position = initial_position + np.array([0, 0, 0.4])
     print(f"Initial position: {initial_position}")
     print(f"Target position: {target_position}")
 
-
+    async def timer():
+        tick = 0
+        dt = 0.01
+        while True:
+            if tick*dt > 5:
+                betaflight.elrs.verbose = False
+            await asyncio.sleep(dt)
+            tick += 1
+    asyncio.create_task(timer())
     while True:
-        fly._forward_command(target_position, [0, 0, 0])
+        betaflight.command(target_position, [0, 0, 0])
         while not deadman.trigger:
             await asyncio.sleep(0.1)
-        fly._forward_command(target_position, [0, 0, 0])
-        await asyncio.sleep(30)
-        fly._forward_command(initial_position + np.array([0, 0, -0.2]), [0, 0, 0])
+        betaflight.command(target_position, [0, 0, 0])
+        timeout = asyncio.create_task(asyncio.sleep(15))
+        while not timeout.done():
+            distance = betaflight.position - target_position
+            print(f"Distance to target: {distance[0]:.2f} {distance[1]:.2f} {distance[2]:.2f} m")
+            await asyncio.sleep(0.1)
+        betaflight.command(initial_position + np.array([0, 0, 0]), [0, 0, 0])
         await asyncio.sleep(5)
         while deadman.trigger:
             await asyncio.sleep(0.1)
-    # await fly.goto(initial_position, distance_threshold=0.0)
-    await fly_main_task # DO NOT TERMINATE, IF TERMINATED, THE DRONE DOES NOT RECEIVE FEEDBACK AND LIKELY SHOOTS INTO THE SKY
+    # await betaflight.goto(initial_position, distance_threshold=0.0)
+    await betaflight_main_task # DO NOT TERMINATE, IF TERMINATED, THE DRONE DOES NOT RECEIVE FEEDBACK AND LIKELY SHOOTS INTO THE SKY
 
 if __name__ == "__main__":
     asyncio.run(main())

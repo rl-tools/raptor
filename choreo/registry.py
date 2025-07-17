@@ -51,7 +51,7 @@ def make_clients(configs):
     clients = {}
     if len(simulator_keys) > 0:
         from simulator import Simulator, SimulatedDrone
-        simulator = Simulator(N_DRONES=np.log2(len(simulator_keys))//1 + 1)
+        simulator = Simulator(N_DRONES=(np.log2(len(simulator_keys))//1 + 1) ** 2)
         for key in simulator_keys:
             client = SimulatedDrone(simulator, name=key, **configs[key]["kwargs"])
             asyncio.create_task(client.run()),

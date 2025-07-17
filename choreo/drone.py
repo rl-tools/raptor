@@ -31,10 +31,18 @@ class Drone:
                 target = target_input if relative else target_input
                 distance = np.linalg.norm(target - self.position)
                 # print(f"Distance to target: {distance:.2f} m", file=mux[4])
-                self._forward_command(target, [0, 0, 0])
+                self.command(target, [0, 0, 0])
             else:
                 print("Position not available yet")
             await asyncio.sleep(0.1)
+
+    async def land(self):
+        while self.position is None:
+            print("Land: Position not available yet")
+            await asyncio.sleep(0.1)
+        target_position = self.position.copy()
+        target_position[2] = 0.0
+        await self.goto(target_position, distance_threshold=0.1)
 
     async def run(self):
         while True:

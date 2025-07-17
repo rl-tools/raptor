@@ -157,32 +157,6 @@ class Crazyflie(Drone):
             # print(f"cmd {'  '.join([f'{float(p):.2}' for p in position])}", file=mux[3])
             self.cf.commander.send_full_state_setpoint(position, velocity, linear_acceleration, orientation, *angular_velocity)
 
-    async def goto(self, target_input, distance_threshold=0.15, timeout=None, relative=True):
-        print(f"Going to {target_input}")
-        distance = None
-        start = time.time()
-        while distance is None or distance > distance_threshold or (timeout is not None and time.time() - start < timeout) and not self.disarmed:
-            if self.position is not None:
-                target = target_input if relative else target_input
-                distance = np.linalg.norm(target - self.position)
-                print(f"Distance to target: {distance:.2f} m", file=mux[4])
-                position = target
-                orientation = np.array([0, 0, 0, 1])
-                linear_velocity = np.zeros(3)
-                angular_velocity = np.zeros(3)
-                linear_acceleration = np.zeros(3)
-                print(f"cmd {'  '.join([f'{float(p):.2}' for p in position])}", file=mux[3])
-                self.cf.commander.send_full_state_setpoint(position, linear_velocity, linear_acceleration, orientation, *angular_velocity)
-            else:
-                print("Position not available yet")
-            await asyncio.sleep(0.1)
-    async def land(self):
-        while self.position is None:
-            print("Land: Position not available yet")
-            await asyncio.sleep(0.1)
-        target_position = self.position.copy()
-        target_position[2] = 0.0
-        await self.goto(target_position, distance_threshold=0.1)
 
     async def disarm(self):
         print("Requesting disarming")
@@ -202,7 +176,7 @@ async def main():
     mocap = Vicon(VICON_TRACKER_IP=VICON_IP)
     instance = "crazyflie_bl"
     crazyflie = Crazyflie(uri=crazyflie_registry[instance], odometry_source="mocap")
-    crazyflie._forward_command(target_position, [0, 0, 0])
+    crazyflie.command(target_position, [0, 0, 0])
     # asyncio.create_task(deadman.monitor(type="foot-pedal")),
     asyncio.create_task(deadman.monitor(type="foot-pedal")),
     crazyflie_main_task = asyncio.create_task(crazyflie.main())
@@ -215,17 +189,17 @@ async def main():
     print(f"Target position: {target_position}")
 
     while True:
-        crazyflie._forward_command(target_position, [0, 0, 0])
+        crazyflie.command(target_position, [0, 0, 0])
         while not deadman.trigger:
             await asyncio.sleep(0.1)
         await asyncio.sleep(1)
-        crazyflie._forward_command(target_position, [0, 0, 0])
+        crazyflie.command(target_position, [0, 0, 0])
         timeout = asyncio.create_task(asyncio.sleep(15))
         while not timeout.done():
             distance = crazyflie.position - target_position
             print(f"Distance to target: {distance[0]:.2f} {distance[1]:.2f} {distance[2]:.2f} m")
             await asyncio.sleep(0.1)
-        crazyflie._forward_command(initial_position + np.array([0, 0, -0.2]), [0, 0, 0])
+        crazyflie.command(initial_position + np.array([0, 0, -0.2]), [0, 0, 0])
         await asyncio.sleep(5)
         while deadman.trigger:
             await asyncio.sleep(0.1)

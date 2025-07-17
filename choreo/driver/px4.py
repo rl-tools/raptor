@@ -145,26 +145,6 @@ class PX4(Drone):
     def _forward_command(self, position, velocity):
         self.latest_command = position, velocity
 
-    async def goto(self, target_input, distance_threshold=0.15, timeout=None, relative=True):
-        print(f"Going to {target_input}")
-        distance = None
-        start = time.time()
-        while distance is None or distance > distance_threshold or (timeout is not None and time.time() - start < timeout) and not self.disarmed:
-            if self.position is not None:
-                target = target_input if relative else target_input
-                distance = np.linalg.norm(target - self.position)
-                # print(f"Distance to target: {distance:.2f} m", file=mux[4])
-                self._forward_command(target, [0, 0, 0])
-            else:
-                print("Position not available yet")
-            await asyncio.sleep(0.1)
-    async def land(self):
-        while self.position is None:
-            print("Land: Position not available yet")
-            await asyncio.sleep(0.1)
-        target_position = self.position.copy()
-        target_position[2] = 0.0
-        await self.goto(target_position, distance_threshold=0.1)
 
     async def disarm(self):
         pass
