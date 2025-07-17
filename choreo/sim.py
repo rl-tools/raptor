@@ -112,7 +112,7 @@ async def main():
     global simulator
     RANDOM_CLOSE_CALLS = False
     scale = 1.5
-    lissajous_parameters = dict(A=1.5*scale, B=0.5*scale, duration=15)
+    lissajous_parameters = dict(A=1.5*scale, B=0.5*scale, duration=20)
     initial_positions = np.array([
         [0, 0., 0],
         [0, -1.25, 0],
@@ -248,7 +248,7 @@ async def main():
     # clients = [px4s[0], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
     # clients = [drones["crazyflie_bl"], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
     clients = [drones["race_jonas"], drones["savagebee_pusher"], drones["crazyflie_bl"], drones["crazyflie"], drones["hummingbird"]]
-    spacing = np.array([2, 1.5, 1.0, 0.75, 1.25])
+    spacing = np.array([2, 1.5, 1.0, 0.75, 1.25]) * 20/15
 
     assert len(clients) == len(spacing), f"Number of clients ({len(clients)}) and spacing ({len(spacing)}) must match"
     
