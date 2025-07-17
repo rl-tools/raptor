@@ -66,5 +66,13 @@
             "console": "integratedTerminal",
             "justMyCode": false,
         },
+        {
+            "name": "figure_eight",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/choreo/figure_eight.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+        },
     ]
 }

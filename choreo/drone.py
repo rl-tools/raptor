@@ -1,5 +1,7 @@
 import asyncio
 from enum import Enum
+import numpy as np
+import time
 
 class Drone:
     def __init__(self, name=None, stdout=None):
@@ -19,6 +21,20 @@ class Drone:
     def command(self, position, velocity):
         # print(f"cmd {'  '.join([f'{float(p):.2}' for p in position])}", file=self.stdout)
         self._forward_command(position, velocity)
+
+    async def goto(self, target_input, distance_threshold=0.15, timeout=None, relative=True):
+        print(f"Going to {target_input}")
+        distance = None
+        start = time.time()
+        while distance is None or distance > distance_threshold or (timeout is not None and time.time() - start < timeout) and not self.disarmed:
+            if self.position is not None:
+                target = target_input if relative else target_input
+                distance = np.linalg.norm(target - self.position)
+                # print(f"Distance to target: {distance:.2f} m", file=mux[4])
+                self._forward_command(target, [0, 0, 0])
+            else:
+                print("Position not available yet")
+            await asyncio.sleep(0.1)
 
     async def run(self):
         while True:

@@ -35,7 +35,6 @@ class ViconObject:
         self.dt = 0.001
         self.start_time = time.time()
         self.last_second = None
-        self.data_records = []
         self.last_position = None
         self.last_position_time = None
         self.framerate = None
@@ -80,9 +79,7 @@ class ViconObject:
                                 else:
                                     frame_dt = 0 
                                     velocity = np.zeros(3)
-                                self.data_records.append((now, frame, frame_dt, position, euler_x, euler_y, euler_z, *orientation, velocity))
                                 writer.writerow([now, frame, frame_dt, *position, euler_x, euler_y, euler_z, *orientation, *velocity])
-                                self.data_records = self.data_records[-self.NUM_FRAMES_CSV:]
                                 self.last_position = position
                                 self.last_position_time = now
                                 self.callback(now_ns, position, orientation, velocity, self.reset_counter)

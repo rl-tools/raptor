@@ -169,86 +169,91 @@ async def main():
             "mocap": "crazyflie",
         },
     ]
-    USE_PX4 = True
-    # USE_PX4 = False
-    USE_CRAZYFLIES = True
-    # USE_CRAZYFLIES = False
-    USE_BETAFLIGHT = True
-    # USE_BETAFLIGHT = False
-    # USE_M5STAMPFLY = True
-    USE_M5STAMPFLY = False
-    drones = {}
-    if USE_CRAZYFLIES:
-        crazyflies = swarm_factory(crazyflie_configs) #[cfg["type"](**cfg["kwargs"]) for cfg in crazyflie_configs]
-        for cfg, crazyflie in zip(crazyflie_configs, crazyflies):
-            mocap.add(cfg["mocap"], crazyflie._mocap_callback)
-            crazyflie.learned_controller = True
-            drones[cfg["mocap"]] = crazyflie
+    FULL_SIM = True
+    if FULL_SIM:
+        spacing = np.array([2, 1.5, 1.0, 0.75, 1.25]) * 20/15
+        clients = [simulator_clients[i] for i in range(len(spacing))]
+    else:
+        USE_PX4 = True
+        # USE_PX4 = False
+        USE_CRAZYFLIES = True
+        # USE_CRAZYFLIES = False
+        USE_BETAFLIGHT = True
+        # USE_BETAFLIGHT = False
+        # USE_M5STAMPFLY = True
+        USE_M5STAMPFLY = False
+        drones = {}
+        if USE_CRAZYFLIES:
+            crazyflies = swarm_factory(crazyflie_configs) #[cfg["type"](**cfg["kwargs"]) for cfg in crazyflie_configs]
+            for cfg, crazyflie in zip(crazyflie_configs, crazyflies):
+                mocap.add(cfg["mocap"], crazyflie._mocap_callback)
+                crazyflie.learned_controller = True
+                drones[cfg["mocap"]] = crazyflie
+            
+        px4_configs = [
+            {
+                "name": "race",
+                "type": PX4,
+                "kwargs": {"uri": "tcp:192.168.1.2:5760"},
+                "mocap": "race_jonas",
+            },
+        ]
+        px4s = []
+        if USE_PX4:
+            for cfg in px4_configs:
+                px4 = PX4(name=cfg["name"], **cfg["kwargs"])
+                px4s.append(px4)
+                mocap.add(cfg["mocap"], px4._mocap_callback)
+                drones[cfg["mocap"]] = px4
         
-    px4_configs = [
-        {
-            "name": "race",
-            "type": PX4,
-            "kwargs": {"uri": "tcp:192.168.1.2:5760"},
-            "mocap": "race_jonas",
-        },
-    ]
-    px4s = []
-    if USE_PX4:
-        for cfg in px4_configs:
-            px4 = PX4(name=cfg["name"], **cfg["kwargs"])
-            px4s.append(px4)
-            mocap.add(cfg["mocap"], px4._mocap_callback)
-            drones[cfg["mocap"]] = px4
-    
-    betaflight_configs = [
-        {
-            "name": "hummingbird",
-            "type": Betaflight,
-            "kwargs": {"uri": "/dev/serial/by-name/elrs-transmitter2", "BAUD": 921600, "rate": 50, "odometry_source": "mocap"},
-            "mocap": "hummingbird",
-        },
-        {
-            "name": "savagebee_pusher",
-            "type": Betaflight,
-            "kwargs": {"uri": "/dev/serial/by-name/elrs-transmitter1", "BAUD": 921600, "rate": 50, "odometry_source": "mocap"},
-            "mocap": "savagebee_pusher",
-        },
-    ]
-    betaflights = []
-    if USE_BETAFLIGHT:
-        betaflights = [Betaflight(**cfg["kwargs"]) for cfg in betaflight_configs]
-        for cfg, betaflight in zip(betaflight_configs, betaflights):
-            mocap.add(cfg["mocap"], betaflight._mocap_callback)
-            drones[cfg["mocap"]] = betaflight
+        betaflight_configs = [
+            {
+                "name": "hummingbird",
+                "type": Betaflight,
+                "kwargs": {"uri": "/dev/serial/by-name/elrs-transmitter2", "BAUD": 921600, "rate": 50, "odometry_source": "mocap"},
+                "mocap": "hummingbird",
+            },
+            {
+                "name": "savagebee_pusher",
+                "type": Betaflight,
+                "kwargs": {"uri": "/dev/serial/by-name/elrs-transmitter1", "BAUD": 921600, "rate": 50, "odometry_source": "mocap"},
+                "mocap": "savagebee_pusher",
+            },
+        ]
+        betaflights = []
+        if USE_BETAFLIGHT:
+            betaflights = [Betaflight(**cfg["kwargs"]) for cfg in betaflight_configs]
+            for cfg, betaflight in zip(betaflight_configs, betaflights):
+                mocap.add(cfg["mocap"], betaflight._mocap_callback)
+                drones[cfg["mocap"]] = betaflight
 
-    m5stampfly_configs = [
-        {
-            "name": "m5stampfly",
-            "type": Betaflight,
-            "kwargs": {"uri": "/dev/serial/by-name/m5stamp-forwarder", "BAUD": 115200, "rate": 50, "odometry_source": "mocap"},
-            "mocap": "m5stampfly",
-        },
-    ]
-    m5stampflies = []
-    if USE_M5STAMPFLY:
-        m5stampflies = [M5StampFly(**cfg["kwargs"]) for cfg in m5stampfly_configs]
-        for cfg, m5stampfly in zip(m5stampfly_configs, m5stampflies):
-            mocap.add(cfg["mocap"], m5stampfly._mocap_callback)
-            drones[cfg["mocap"]] = m5stampfly
+        m5stampfly_configs = [
+            {
+                "name": "m5stampfly",
+                "type": Betaflight,
+                "kwargs": {"uri": "/dev/serial/by-name/m5stamp-forwarder", "BAUD": 115200, "rate": 50, "odometry_source": "mocap"},
+                "mocap": "m5stampfly",
+            },
+        ]
+        m5stampflies = []
+        if USE_M5STAMPFLY:
+            m5stampflies = [M5StampFly(**cfg["kwargs"]) for cfg in m5stampfly_configs]
+            for cfg, m5stampfly in zip(m5stampfly_configs, m5stampflies):
+                mocap.add(cfg["mocap"], m5stampfly._mocap_callback)
+                drones[cfg["mocap"]] = m5stampfly
 
-    # clients = [*px4s, *crazyflies]
-    # clients = [*simulator_clients[:-len(clients)], *clients]
-    # clients = simulator_clients
+        # clients = [*px4s, *crazyflies]
+        # clients = [*simulator_clients[:-len(clients)], *clients]
+        # clients = simulator_clients
 
-    # clients = [crazyflies[0], m5stampflies[0], crazyflies[1], betaflights[0]]
-    # clients = [m5stampflies[0], simulator_clients[1], simulator_clients[2], simulator_clients[3]]
-    # clients = [px4s[0], simulator_clients[1], simulator_clients[2], simulator_clients[3]]
-    # clients = [simulator_clients[0], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
-    # clients = [px4s[0], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
-    # clients = [drones["crazyflie_bl"], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
-    clients = [drones["race_jonas"], drones["savagebee_pusher"], drones["crazyflie_bl"], drones["crazyflie"], drones["hummingbird"]]
-    spacing = np.array([2, 1.5, 1.0, 0.75, 1.25]) * 20/15
+        # clients = [crazyflies[0], m5stampflies[0], crazyflies[1], betaflights[0]]
+        # clients = [m5stampflies[0], simulator_clients[1], simulator_clients[2], simulator_clients[3]]
+        # clients = [px4s[0], simulator_clients[1], simulator_clients[2], simulator_clients[3]]
+        # clients = [simulator_clients[0], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
+        # clients = [px4s[0], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
+        # clients = [drones["crazyflie_bl"], simulator_clients[1], simulator_clients[2], simulator_clients[3], simulator_clients[4], simulator_clients[5]]
+        clients = [drones["race_jonas"], drones["savagebee_pusher"], drones["crazyflie_bl"], drones["crazyflie"], drones["hummingbird"]]
+        spacing = np.array([2, 1.5, 1.0, 0.75, 1.25]) * 20/15
 
     assert len(clients) == len(spacing), f"Number of clients ({len(clients)}) and spacing ({len(spacing)}) must match"
     
@@ -268,7 +273,7 @@ async def main():
             await asyncio.sleep(dt)
             tick += 1
     tasks = [
-        asyncio.create_task(deadman.monitor(type="foot-pedal")),
+        asyncio.create_task(deadman.monitor(type="gamepad")),
         asyncio.create_task(behavior.run()),
         asyncio.create_task(simulator.run()),
         *[asyncio.create_task(c.run()) for c in clients],

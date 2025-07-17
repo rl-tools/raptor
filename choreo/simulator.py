@@ -9,7 +9,7 @@ from drone import Drone
 class Simulator:
 
     def __init__(self, N_DRONES=4, MAX_POSITION_ERROR=0.5, MAX_VELOCITY_ERROR=0.5, ARMING_TIMEOUT=5):
-        self.vector = vector_selector[8]
+        self.vector = vector_selector[N_DRONES]
         self.MAX_POSITION_ERROR = MAX_POSITION_ERROR
         self.MAX_VELOCITY_ERROR = MAX_VELOCITY_ERROR
         self.ARMING_TIMEOUT = ARMING_TIMEOUT
@@ -38,16 +38,26 @@ class Simulator:
     def num_drones(self):
         return self.env.N_ENVIRONMENTS
     
-    def register_client(self, client):
+    def register_client(self, client, initial_position=None, parameter_path=None):
         if len(self.clients) >= self.num_drones():
             raise ValueError("Maximum number of drones reached")
         drone_id = len(self.clients)
+        if initial_position is not None:
+            self.state.states[drone_id].position = initial_position
+            self.state.states[drone_id].linear_velocity[:] = 0
         client._odometry_callback(self.state.states[drone_id].position, self.state.states[drone_id].linear_velocity)
         self.clients.append(client)
         client.set_command_sink(lambda position, velocity: self.command_sink(drone_id, position, velocity))
         client.set_arm_sink(lambda: self.arm_sink(drone_id))
         client.set_disarm_sink(lambda: self.disarm_sink(drone_id))
-    
+
+        if parameter_path is not None:
+            parameters = json.loads(l2f.parameters_to_json(self.device, self.env.environments[drone_id], self.params.parameters[drone_id]))
+            with open(parameter_path, "r") as f:
+                parameters["dynamics"] = json.load(f)["dynamics"]
+            l2f.parameters_from_json(self.device, self.env.environments[drone_id], json.dumps(parameters), self.params.parameters[drone_id])
+        
+
     def command_sink(self, drone_id, position, velocity):
         self.setpoints[drone_id, :3] = position
         self.setpoints[drone_id, 3:6] = velocity
@@ -107,8 +117,9 @@ class Simulator:
 
 
 class SimulatedDrone(Drone):
-    def __init__(self, simulator, **kwargs):
+    def __init__(self, simulator, initial_position=None, parameter_path=None, **kwargs):
         super().__init__(**kwargs)
+        self.parameter_path = parameter_path
         self.simulator = simulator
         self.command_sink = None
         self.arm_sink = None
@@ -116,7 +127,7 @@ class SimulatedDrone(Drone):
         self.safety_distance = 0.2
         self.simulated = True
 
-        simulator.register_client(self)
+        simulator.register_client(self, initial_position=initial_position, parameter_path=parameter_path)
 
     def set_command_sink(self, command_sink):
         self.command_sink = command_sink
