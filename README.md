@@ -153,7 +153,9 @@ This interface provides simple functions for inference like e.g.
 ```c++
 auto executor_status = rl_tools_inference_applications_l2f_control(current_time * 1000, &observation, &action);
 ```
-`rl_tools_inference_applications_l2f_control` should be called at the interval configured in `CONTROL_INTERVAL_INTERMEDIATE_NS`.
+`rl_tools_inference_applications_l2f_control` should be called at the interval configured in `CONTROL_INTERVAL_INTERMEDIATE_NS`. 
+
+The foundation policy that has been exported as C++ code should be included (e.g. `#include <blob/policy.h>` in the example) and it can be downloaded [here](https://github.com/rl-tools/px4-blob/blob/d081d8ca4a558d90f864e352442da14a4c7dd866/policy.h).
 
 
 ## Training
