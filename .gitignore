@@ -3,3 +3,4 @@
 /cache
 /mav*
 /*.csv
+/**/.DS_Store
