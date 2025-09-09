@@ -1,13 +1,17 @@
+<div align="center">
+<img src="./media/logo.svg"></img>
+</div>
+
 # RAPTOR: A Foundation Policy for Quadrotor Control
 
 ## Usage
 If you want to use your own simulator:
 ```bash
-pip install foundation-policy==1.0.0
+pip install foundation-policy==1.0.1
 ```
 ```python
-from foundation_policy import QuadrotorPolicy
-policy = QuadrotorPolicy()
+from foundation_policy import Raptor
+policy = Raptor()
 policy.reset()
 action = [0, 0, 0, 0]
 for simulation_step in range(1000):
@@ -21,7 +25,7 @@ Note that the axis conventions are FLU (x = forward, y = left, z = up). Please c
 ### Usage: L2F
 The following instructions show how to use [l2f](https://github.com/rl-tools/l2f), the simulator used for training the foundation policy:
 ```bash
-pip install l2f==2.0.18 ui-server==0.0.13 foundation-policy==1.0.0
+pip install l2f==2.0.18 ui-server==0.0.13 foundation-policy==1.0.1
 ```
 Run `ui-server` in background and open [http://localhost:13337](http://localhost:13337)
 ```bash
@@ -34,9 +38,9 @@ import numpy as np
 import asyncio, websockets, json
 import l2f
 from l2f import vector8 as vector
-from foundation_policy import QuadrotorPolicy
+from foundation_policy import Raptor
 
-policy = QuadrotorPolicy()
+policy = Raptor()
 device = l2f.Device()
 rng = vector.VectorRng()
 env = vector.VectorEnvironment()
