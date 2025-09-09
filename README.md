@@ -205,3 +205,20 @@ cd rl-tools/src/foundation_policy
 ./extract_checkpoints.sh > checkpoints_$RL_TOOLS_EXTRACK_EXPERIMENT.txt
 ```
 Then change the experiment name to the content of `$RL_TOOLS_EXTRACK_EXPERIMENT` in `post_training/main.cpp` and the experiment directory from `1k-experiments` to `experiments` such that it will find the newly trained checkpoints referred to by the `checkpoint_xxx.txt`.
+
+
+### macOS
+On macOS, use Accelerate instead of MKL and build natively replacing the CMake configure and build commands with:
+```
+cd rl-tools
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -DRL_TOOLS_BACKEND_ENABLE_ACCELERATE=ON -DRL_TOOLS_ENABLE_TARGETS=ON -DRL_TOOLS_EXPERIMENTAL=ON -DRL_TOOLS_ENABLE_HDF5=ON -DRL_TOOLS_ENABLE_JSON=ON -DRL_TOOLS_ENABLE_TENSORBOARD=ON
+cmake --build . --target foundation_policy_pre_training_sample_dynamics_parameters --target foundation_policy_pre_training --target foundation_policy_post_training
+cd ..
+./build/src/foundation_policy/foundation_policy_post_training
+```
+
+### CMake 4+
+
+Use `-DCMAKE_POLICY_VERSION_MINIMUM=3.5`
