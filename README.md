@@ -2,7 +2,7 @@
 <img src="./media/logo.svg"></img>
 </div>
 
-# RAPTOR: A Foundation Policy for Quadrotor Control
+<h1 align="center">A Foundation Policy for Quadrotor Control</h1>
 
 ## Usage
 If you want to use your own simulator:
