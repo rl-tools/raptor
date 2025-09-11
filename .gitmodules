@@ -1,6 +1,3 @@
 [submodule "rl-tools"]
 	path = rl-tools
 	url = https://github.com/rl-tools/rl-tools-internal.git
-[submodule "flight_data"]
-	path = flight_data
-	url = https://github.com/rl-tools/foundation-policy-flight-data.git
