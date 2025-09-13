@@ -13,7 +13,6 @@ pip install foundation-policy==1.0.1
 from foundation_policy import Raptor
 policy = Raptor()
 policy.reset()
-action = [0, 0, 0, 0]
 for simulation_step in range(1000):
     observation = np.array([[*sim.position, *R(sim.orientation).flatten(), *sim.linear_velocity, *sim.angular_velocity, *sim.action]])
     action = policy.evaluate_step(observation)[0] # the policy works on batches by default
