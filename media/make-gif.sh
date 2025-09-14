@@ -1,5 +1,5 @@
 ffmpeg -y -i '/Volumes/DataPuddle3/web app.mov' \
-  -vf "scale=350:-1:flags=lanczos,format=rgb24,palettegen=max_colors=32" \
+  -vf "scale=350:-1:flags=lanczos,format=rgb24,palettegen=max_colors=48" \
   -frames:v 1 palette16.png
 
 ffmpeg -i '/Volumes/DataPuddle3/web app.mov' -i palette16.png \
