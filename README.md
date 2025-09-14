@@ -4,6 +4,10 @@
 
 <h1 align="center">A Foundation Policy for Quadrotor Control</h1>
 
+<div align="center">
+<a href="https://youtu.be/hVzdWRFTX3k" rel="Link to video"><img src="https://github.com/rl-tools/raptor/blob/master/media/thumbnail.jpg" width='450'/></a>
+</div>
+
 ## Usage
 If you want to use your own simulator:
 ```bash
