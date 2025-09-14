@@ -6,6 +6,8 @@
 
 <div align="center">
 <a href="https://youtu.be/hVzdWRFTX3k" rel="Link to video"><img src="https://github.com/rl-tools/raptor/blob/master/media/thumbnail.jpg" width='450'/></a>
+    </br>
+<a href="https://raptor.rl.tools" rel="Link to Project Page"><img src="https://github.com/rl-tools/raptor/blob/master/media/raptor.rl.tools.gif" width='450'/></a>
 </div>
 
 ## Usage
