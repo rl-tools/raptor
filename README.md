@@ -4,6 +4,13 @@
 
 <h1 align="center">A Foundation Policy for Quadrotor Control</h1>
 
+<p align="center">
+  Paper: <a href="https://doi.org/10.1126/scirobotics.aec1481">Science Robotics</a> / <a href="https://arxiv.org/abs/2311.13081">arXiv</a> | 
+  Video: <a href="https://youtu.be/hVzdWRFTX3k">YouTube</a> | 
+  Interactive Project Page: <a href="https://raptor.rl.tools">https://raptor.rl.tools</a>
+  </br>
+</p>
+
 <div align="center">
 <a href="https://youtu.be/hVzdWRFTX3k" rel="Link to video"><img src="https://github.com/rl-tools/raptor-media/blob/ef2dfc6ec650ad0226d74b9db33083cb9b39b4f7/thumbnail.jpg" width='450'/></a>
     </br>
@@ -243,3 +250,22 @@ cd ..
 ### CMake 4+
 
 Use `-DCMAKE_POLICY_VERSION_MINIMUM=3.5`
+
+
+## Citing
+When using our code/setup in an academic work please cite our publication using the following Bibtex citation:
+```
+@article{
+doi:10.1126/scirobotics.aec1481,
+author = {Jonas Eschmann  and Dario Albani  and Giuseppe Loianno },
+title = {RAPTOR: A foundation policy for quadrotor control},
+journal = {Science Robotics},
+volume = {11},
+number = {114},
+pages = {eaec1481},
+year = {2026},
+doi = {10.1126/scirobotics.aec1481},
+URL = {https://www.science.org/doi/abs/10.1126/scirobotics.aec1481},
+eprint = {https://www.science.org/doi/pdf/10.1126/scirobotics.aec1481},
+}
+```
